@@ -1,0 +1,15 @@
+version: "3.9"
+services:
+  taskmgr:
+  build: ./backend
+  container_name: pi-task-manager
+  ports:
+    - "8000:8000"
+  environment:
+    - FLASK_ENV=production
+    - TZ=America/New_York # change to your timezone
+  volumes:
+    - taskmgr-data:/data
+  restart: unless-stopped
+volumes:
+  taskmgr-data:

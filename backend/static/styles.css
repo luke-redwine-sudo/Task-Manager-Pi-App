@@ -1,0 +1,56 @@
+:root {
+ --bg: #fafafa;
+ --fg: #111;
+ --muted: #666;
+ --acc: #0066ff;
+ --ok: #0a7a24;
+ --due: #b00020;
+ --card: #ffffff;
+ --radius: 16px;
+}
+
+* { box-sizing: border-box; }
+html, body { height: 100%; }
+body { margin: 0; font-family: system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, "Helvetica Neue", Arial, Noto Sans, "Apple Color Emoji", "Segoe UI Emoji"; background: var(--bg); color: var(--fg); }
+
+
+/* Header bar sized for touch */
+.bar { display: flex; align-items: center; gap: .5rem; padding: .75rem; border-bottom: 1px solid #ddd; background: var(--card); position: sticky; top: 0; z-index: 1; }
+#clock { font-weight: 600; font-size: 1.1rem; }
+.spacer { flex: 1; }
+
+
+main { display: grid; grid-template-columns: 1fr 1fr 320px; gap: 1rem; padding: 1rem; }
+@media (max-width: 900px) { main { grid-template-columns: 1fr; } .unicorn{ order:3 } }
+
+
+h2 { margin: .25rem 0 .5rem; padding: .5rem .75rem; background: var(--card); border: 2px solid #000; border-radius: var(--radius); width: fit-content; }
+
+
+.list { display: flex; flex-direction: column; gap: .75rem; }
+.card { background: var(--card); border: 2px solid #000; border-radius: var(--radius); padding: .75rem; }
+
+
+.task { display: grid; grid-template-columns: 1fr auto auto; align-items: center; gap: .5rem; }
+.task .title { font-size: 1.25rem; }
+.task .meta { font-size: .9rem; color: var(--muted); }
+.badge { border: 2px solid #000; border-radius: 12px; padding: .15rem .5rem; font-size: .85rem; }
+.badge.due { color: var(--due); }
+.badge.ok { color: var(--ok); }
+
+
+.btn { border-radius: 999px; border: 2px solid #000; background: var(--acc); color: white; font-weight: 700; padding: .65rem 1rem; font-size: 1rem; touch-action: manipulation; }
+.btn.secondary { background: #e9e9e9; color: #111; }
+.iconbtn { width: 48px; height: 48px; font-size: 1.2rem; display: grid; place-items: center; border-radius: 12px; border: 2px solid #000; background: #fff; }
+.iconbtn:active, .btn:active { transform: translateY(1px); }
+
+
+/* Touch-friendly dialog */
+dialog::backdrop { background: rgba(0,0,0,.15); }
+.modal { min-width: min(90vw, 480px); }
+.modal label { display: block; margin: .5rem 0; }
+.modal input, .modal textarea, .modal select { width: 100%; padding: .6rem .7rem; border-radius: 10px; border: 1px solid #aaa; font-size: 1rem; }
+.modal .row { display:flex; gap:.5rem; align-items: center; }
+
+
+.unicorn { align-self: start; }
