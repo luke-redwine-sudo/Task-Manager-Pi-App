@@ -1,56 +1,115 @@
-:root {
- --bg: #fafafa;
- --fg: #111;
- --muted: #666;
- --acc: #0066ff;
- --ok: #0a7a24;
- --due: #b00020;
- --card: #ffffff;
- --radius: 16px;
+:root{
+  --bg:#fafafa; --fg:#111; --muted:#555; --acc:#0066ff;
+  --ok:#0a7a24; --due:#b00020; --card:#fff;
+  --radius:18px; --pad:12px; --touch:64px;
+  --barH: 60px; /* header height for layout calc */
+  --indent: 18px; /* indentation for lists under banners */
+}
+*{box-sizing:border-box}
+.hidden{display:none!important}
+.m0{margin:0}
+.wfull{width:100%}
+html,body{height:100%}
+body{
+  margin:0; font-family:system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,"Helvetica Neue",Arial;
+  background:var(--bg); color:var(--fg); font-size:18px;
 }
 
-* { box-sizing: border-box; }
-html, body { height: 100%; }
-body { margin: 0; font-family: system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, "Helvetica Neue", Arial, Noto Sans, "Apple Color Emoji", "Segoe UI Emoji"; background: var(--bg); color: var(--fg); }
+/* Header */
+.bar{
+  display:flex;align-items:center;gap:.5rem;
+  padding:.5rem .75rem;border-bottom:1px solid #ddd;
+  background:var(--card);position:sticky;top:0;z-index:2;
+  min-height: var(--barH);
+}
+#clock{font-weight:600;font-size:1.05rem}
+.spacer{flex:1}
 
+/* 2-column grid pinned to viewport */
+main.grid{
+  display:grid;
+  grid-template-columns: 1fr 220px;
+  gap: 14px;
+  padding: .75rem;
+  height: calc(100vh - var(--barH));
+  overflow: hidden;
+}
 
-/* Header bar sized for touch */
-.bar { display: flex; align-items: center; gap: .5rem; padding: .75rem; border-bottom: 1px solid #ddd; background: var(--card); position: sticky; top: 0; z-index: 1; }
-#clock { font-weight: 600; font-size: 1.1rem; }
-.spacer { flex: 1; }
+/* Only the left column scrolls */
+.content{
+  min-height: 0;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  padding-right: 4px;
+}
 
+/* Sidebar */
+.sidebar{position:relative}
+.sidebar .stack{position:sticky; top:68px; display:flex; flex-direction:column; gap:12px}
 
-main { display: grid; grid-template-columns: 1fr 1fr 320px; gap: 1rem; padding: 1rem; }
-@media (max-width: 900px) { main { grid-template-columns: 1fr; } .unicorn{ order:3 } }
+/* Section headers — full width, thicker border, bigger text */
+h2{
+  margin:.25rem 0 .25rem;
+  padding:.7rem 1rem;
+  background:var(--card);
+  border:8px solid #000;             /* thicker */
+  border-radius:22px;
+  width:100%;                         /* span the scroll area */
+  font-size:1.3rem;                   /* already larger */
+  font-weight:800;
+  letter-spacing:.02em;
+}
 
+/* Indent lists under the Task and Completed banners */
+#taskList,
+#completedList{
+  padding-left: var(--indent);
+}
 
-h2 { margin: .25rem 0 .5rem; padding: .5rem .75rem; background: var(--card); border: 2px solid #000; border-radius: var(--radius); width: fit-content; }
+.list{display:flex;flex-direction:column;gap:.6rem}
 
+/* Card look: rounded thick border */
+.card{background:var(--card); border:2px solid #000; border-radius:16px; padding:.6rem}
 
-.list { display: flex; flex-direction: column; gap: .75rem; }
-.card { background: var(--card); border: 2px solid #000; border-radius: var(--radius); padding: .75rem; }
+/* Task rows */
+.task{display:grid; grid-template-columns:1fr auto; align-items:center; gap:.5rem}
+.task .title{font-size:1.15rem; line-height:1.25}
+.task .meta{font-size:.95rem; color:var(--muted); margin-top:.25rem}
+.actions{display:flex; align-items:center; gap:.4rem}
 
+/* Buttons */
+.btn{min-height:var(--touch);min-width:var(--touch);border:2px solid #000;background:var(--acc);color:#fff;font-weight:700;padding:.55rem 1.1rem;font-size:1rem;touch-action:manipulation;border-radius:28px}
+.btn.secondary{background:#e9e9e9;color:#111}
+.iconbtn{width:52px;height:52px;font-size:1.1rem;display:grid;place-items:center;border-radius:12px;border:2px solid #000;background:#fff}
+.iconbtn:active,.btn:active{transform:translateY(1px)}
 
-.task { display: grid; grid-template-columns: 1fr auto auto; align-items: center; gap: .5rem; }
-.task .title { font-size: 1.25rem; }
-.task .meta { font-size: .9rem; color: var(--muted); }
-.badge { border: 2px solid #000; border-radius: 12px; padding: .15rem .5rem; font-size: .85rem; }
-.badge.due { color: var(--due); }
-.badge.ok { color: var(--ok); }
+/* Manage view header */
+.manage-head{display:flex; align-items:center; gap:.5rem}
 
+/* Fullscreen sheet for input (keeps OSK on top) */
+.sheet{position:fixed; inset:0; display:grid; grid-template-rows:1fr auto; background:rgba(0,0,0,.1); z-index:10}
+.sheet-body{overflow:auto; padding:.75rem}
+.sheet .modal{background:var(--card); border:2px solid #000; border-radius:18px; padding:.75rem; max-width:560px; margin:0 auto}
+.modal label{display:block; margin:.5rem 0}
+.modal input,.modal textarea,.modal select{width:100%; padding:.7rem .8rem; border-radius:12px; border:1px solid #aaa; font-size:1rem}
+.modal .row{display:flex; gap:.5rem; align-items:center}
 
-.btn { border-radius: 999px; border: 2px solid #000; background: var(--acc); color: white; font-weight: 700; padding: .65rem 1rem; font-size: 1rem; touch-action: manipulation; }
-.btn.secondary { background: #e9e9e9; color: #111; }
-.iconbtn { width: 48px; height: 48px; font-size: 1.2rem; display: grid; place-items: center; border-radius: 12px; border: 2px solid #000; background: #fff; }
-.iconbtn:active, .btn:active { transform: translateY(1px); }
+/* On-Screen Keyboard */
+.osk{position:sticky; bottom:0; background:var(--card); border-top:2px solid #000; box-shadow:0 -6px 20px rgba(0,0,0,.08); z-index:11; padding:.5rem; margin-top:.75rem}
+.osk[hidden]{display:none}
+.osk-rows{display:grid; gap:.35rem}
+.osk-row{display:flex; gap:.35rem; justify-content:center}
+.osk-key{flex:1 0 auto; min-width:44px; height:56px; border:2px solid #000; border-radius:12px; background:#fff; font-size:1.1rem; font-weight:600; display:grid; place-items:center; user-select:none}
+.osk-key.wide{flex:2 0 auto}
+.osk-key.space{min-width:40vw}
+.osk-key:active{transform:translateY(1px)}
 
-
-/* Touch-friendly dialog */
-dialog::backdrop { background: rgba(0,0,0,.15); }
-.modal { min-width: min(90vw, 480px); }
-.modal label { display: block; margin: .5rem 0; }
-.modal input, .modal textarea, .modal select { width: 100%; padding: .6rem .7rem; border-radius: 10px; border: 1px solid #aaa; font-size: 1rem; }
-.modal .row { display:flex; gap:.5rem; align-items: center; }
-
-
-.unicorn { align-self: start; }
+/* Unicorn fixed in bottom-right corner */
+.unicorn-floating{
+  position: fixed;
+  right: 12px;
+  bottom: 12px;
+  width: 220px;
+  z-index: 1;        /* below the sheet/keyboard */
+  pointer-events: none; /* decorative */
+}

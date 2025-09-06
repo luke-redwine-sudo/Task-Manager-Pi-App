@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="utf-8"/>
-    <meta name="viewport" content="width=device-width, initial-scale=1"/>
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1"/>
     <title>Pi Task Manager</title>
     <link rel="stylesheet" href="/styles.css"/>
 </head>
@@ -10,63 +10,83 @@
 <header class="bar">
     <div id="clock" aria-live="polite"></div>
     <div class="spacer"></div>
-    <button id="addBtn" class="btn">Add Task</button>
-    <button id="removeBtn" class="btn secondary">Remove Task</button>
-    <button id="editBtn" class="btn secondary">Edit Task</button>
 </header>
 
+<main class="grid">
+    <!-- Left column: content -->
+    <div class="content">
+        <!-- HOME VIEW: only tasks due today -->
+        <div id="homeView">
+            <section>
+                <h2>Tasks</h2>
+                <div id="taskList" class="list"></div>
+            </section>
 
-<main>
-    <section>
-        <h2>Tasks</h2>
-        <div id="taskList" class="list"></div>
-    </section>
+            <section>
+                <h2>Completed</h2>
+                <div id="completedList" class="list"></div>
+            </section>
+        </div>
 
+        <!-- MANAGE VIEW: edit/remove all tasks -->
+        <div id="manageView" class="hidden">
+            <section class="manage-head">
+                <button id="backHome" class="btn secondary pill">← Back</button>
+                <h2 class="m0">Manage Tasks</h2>
+            </section>
+            <div id="manageList" class="list"></div>
+        </div>
+    </div>
 
-    <section>
-        <h2>Completed</h2>
-        <div id="completedList" class="list"></div>
-    </section>
-
-
-    <aside class="unicorn">
-        <div class="card">
-            <h3>Cute
-                <br/>Unicorn
-                <br/>Character
-                <br/>Here 🦄</h3>
+    <!-- Right column: sidebar -->
+    <aside class="sidebar">
+        <div class="stack">
+            <button id="manageBtn" class="btn secondary pill wfull">Manage Tasks</button>
+            <button id="addBtn" class="btn pill wfull">Add Task</button>
         </div>
     </aside>
 </main>
 
+<!-- Bottom-right unicorn (decorative) -->
+<div class="card unicorn-floating" aria-hidden="true">
+    <h3>
+        Cute<br/>Unicorn<br/>Character<br/>Here 🦄
+    </h3>
+</div>
 
-<!-- Modals -->
-<dialog id="taskModal">
-    <form method="dialog" id="taskForm" class="modal">
-        <h3 id="modalTitle">Add Task</h3>
-        <label>Title
-            <input required name="title" placeholder="Task title"/>
-        </label>
-        <label>Notes
-            <textarea name="notes" rows="2" placeholder="Optional"></textarea>
-        </label>
-        <div class="row">
-            <label class="inline">Every
-                <input required name="freq_value" type="number" min="1" value="1" style="width:5rem"/>
+<!-- Fullscreen Sheet for Add/Edit (keeps OSK accessible) -->
+<div id="taskSheet" class="sheet hidden" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
+    <div class="sheet-body">
+        <form id="taskForm" class="modal" autocomplete="off">
+            <h3 id="modalTitle">Add Task</h3>
+            <label>Title
+                <input required name="title" placeholder="Task title" inputmode="latin"/>
             </label>
-            <select name="freq_unit">
-                <option value="hours">hours</option>
-                <option value="days" selected>days</option>
-                <option value="weeks">weeks</option>
-            </select>
-        </div>
-        <menu>
-            <button value="cancel" class="btn secondary">Cancel</button>
-            <button id="saveTask" value="default" class="btn">Save</button>
-        </menu>
-    </form>
-</dialog>
+            <label>Notes
+                <textarea name="notes" rows="2" placeholder="Optional"></textarea>
+            </label>
+            <div class="row">
+                <label class="inline">Every
+                    <input required name="freq_value" type="number" inputmode="numeric" min="1" value="1" style="width:5rem"/>
+                </label>
+                <select name="freq_unit">
+                    <option value="hours">hours</option>
+                    <option value="days" selected>days</option>
+                    <option value="weeks">weeks</option>
+                </select>
+            </div>
+            <menu>
+                <button type="button" id="cancelSheet" class="btn secondary pill">Cancel</button>
+                <button id="saveTask" class="btn pill">Save</button>
+            </menu>
+        </form>
+    </div>
 
+    <!-- On-Screen Keyboard lives inside the sheet -->
+    <div id="osk" class="osk" aria-hidden="true" hidden>
+        <div id="oskRows" class="osk-rows"></div>
+    </div>
+</div>
 
 <script src="/app.js"></script>
 </body>
