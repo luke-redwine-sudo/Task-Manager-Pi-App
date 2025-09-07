@@ -11,9 +11,10 @@ const manageList = $("#manageList");
 const sheet = $("#taskSheet");
 const form = $("#taskForm");
 const cancelSheet = $("#cancelSheet");
-const freqUnitSel = $("#freqUnit");
-const onceRow = $("#onceRow");
-const dueLocalInput = $("#dueLocal");
+const freqUnitSel = document.getElementById("freqUnit");
+const onceRow      = document.getElementById("onceRow");
+const dueDateInput = document.getElementById("dueDate");
+const dueTimeInput = document.getElementById("dueTime");
 let editingId = null;
 
 // OSK
@@ -29,7 +30,6 @@ const fmtET = new Intl.DateTimeFormat('en-US', {
   dateStyle: 'short',
   timeStyle: 'medium',
 });
-// Convert ISO from backend to a Date assuming UTC if offset is missing
 function toUTCDate(v){
   if (v instanceof Date) return v;
   if (typeof v === 'string') {
@@ -40,26 +40,46 @@ function toUTCDate(v){
 }
 const formatET = (v) => fmtET.format(toUTCDate(v));
 
-function toLocalDTInputValue(isoOrDate){
-  const d = toUTCDate(isoOrDate);
-  // Convert to local yyyy-MM-ddThh:mm for <input type="datetime-local">
-  const pad = (n)=> String(n).padStart(2,'0');
-  const yyyy = d.getFullYear();
-  const mm = pad(d.getMonth()+1);
-  const dd = pad(d.getDate());
-  const hh = pad(d.getHours());
-  const mi = pad(d.getMinutes());
-  return `${yyyy}-${mm}-${dd}T${hh}:${mi}`;
-}
-function fromLocalDTInputToUTCString(localStr){
-  // localStr is local time; convert to UTC ISO with Z
-  if(!localStr) return null;
-  const d = new Date(localStr);
-  return new Date(d.getTime() - d.getTimezoneOffset()*60000).toISOString();
-}
+/* --- ET day key helpers (YYYY-MM-DD in ET) --- */
+const dayKeyETFmt = new Intl.DateTimeFormat('en-CA', {
+  timeZone: 'America/New_York',
+  year: 'numeric', month: '2-digit', day: '2-digit'
+});
+const etDayKey = (v) => dayKeyETFmt.format(toUTCDate(v));
+let currentDayKey = etDayKey(new Date());
 
-// Clock in ET
-function tickClock(){ $("#clock").textContent = formatET(new Date()); }
+/* ---- Congrats banner ---- */
+const banner = document.getElementById('congratsBanner');
+let bannerTimer = null;
+function showCongrats(msg = "🎉 Congratulations, you did it!") {
+  if (banner) {
+    banner.textContent = msg;
+    banner.classList.add('show');
+    if (bannerTimer) clearTimeout(bannerTimer);
+    bannerTimer = setTimeout(() => banner.classList.remove('show'), 4500);
+  }
+
+  // 🦄 swap unicorn image briefly
+  if (unicornImg) {
+    const idle = unicornImg.dataset.srcIdle || unicornImg.src;
+    const party = unicornImg.dataset.srcCelebrate || idle;
+    unicornImg.src = party;
+    clearTimeout(unicornImg._swapTimer);
+    unicornImg._swapTimer = setTimeout(() => { unicornImg.src = idle; }, 4000);
+  }
+}
+if (banner) banner.addEventListener('click', () => banner.classList.remove('show'));
+
+// Clock in ET (auto-refresh lists at midnight ET)
+function tickClock(){
+  const now = new Date();
+  $("#clock").textContent = formatET(now);
+  const key = etDayKey(now);
+  if (key !== currentDayKey) {
+    currentDayKey = key;   // new day in ET
+    fetchAll();            // re-render so Completed clears for the new day
+  }
+}
 setInterval(tickClock, 1000); tickClock();
 
 // Fetch
@@ -73,16 +93,6 @@ async function fetchAll(){
   renderManage(tasks);
 }
 
-// Show one-off row depending on selection
-function syncOnceVisibility(){
-  const isOnce = freqUnitSel.value === 'once';
-  onceRow.style.display = isOnce ? '' : 'none';
-  form.freq_value.required = !isOnce;
-  dueLocalInput.required = isOnce;
-}
-
-freqUnitSel.addEventListener('change', syncOnceVisibility);
-
 function isDueToday(dueISO){
   const now = new Date();
   const end = new Date(now);
@@ -91,46 +101,70 @@ function isDueToday(dueISO){
   return due <= end; // includes overdue
 }
 
-// HOME view: only tasks due today; no due text
+/* ---------- Frequency → class ---------- */
+function freqClass(unit){
+  const u = (unit || '').toLowerCase();
+  if (u === 'days' || u === 'day') return 'freq-days';
+  if (u === 'weeks' || u === 'week') return 'freq-weeks';
+  if (u === 'months' || u === 'month') return 'freq-months';
+  if (u === 'once') return 'freq-once';
+  return '';
+}
+
+/* ---------- HOME view ---------- */
 function renderHome(tasks, logs){
   taskList.innerHTML='';
   completedList.innerHTML='';
 
-  tasks.filter(t => t.is_active && isDueToday(t.due_at))
-       .sort((a,b)=> toUTCDate(a.due_at)-toUTCDate(b.due_at))
-       .forEach(t => taskList.append(taskRow(t)));
+  // Map task_id -> freq_unit for log coloring
+  const freqMap = new Map(tasks.map(t => [t.id, t.freq_unit]));
 
-  // Completed list times in ET
-  logs.slice(0,20).forEach(l => {
-    const row = document.createElement('div');
-    row.className = 'card';
-    row.textContent = `${l.title || '(untitled)'} — done ${formatET(l.done_at)}`;
-    completedList.append(row);
-  });
+  // Tasks due today
+  tasks
+    .filter(t => t.is_active && isDueToday(t.due_at))
+    .sort((a,b)=> toUTCDate(a.due_at)-toUTCDate(b.due_at))
+    .forEach(t => taskList.append(taskRow(t)));
+
+  // Completed list (today only in ET, color-coded)
+  logs
+    .filter(l => etDayKey(l.done_at) === currentDayKey)
+    .slice(0,20)
+    .forEach(l => {
+      const fc = freqClass(freqMap.get(l.task_id));
+      const row = document.createElement('div');
+      row.className = 'card task';
+      if (fc) row.classList.add(fc);
+
+      const title = document.createElement('div');
+      title.className = 'title';
+      title.textContent = l.title || '(untitled)';
+
+      const meta = document.createElement('div');
+      meta.className = 'meta';
+      meta.textContent = `Completed: ${formatET(l.done_at)}`;
+
+      const left = document.createElement('div');
+      left.append(title, meta);
+
+      row.append(left); // no actions for completed items
+      completedList.append(row);
+    });
 }
 
-const banner = document.getElementById('congratsBanner');
-let bannerTimer = null;
-function showCongrats(msg = "🎉 Congratulations, you did it!") {
-  if (!banner) return;
-  banner.textContent = msg;
-  banner.classList.add('show');
-  if (bannerTimer) clearTimeout(bannerTimer);
-  bannerTimer = setTimeout(() => banner.classList.remove('show'), 2500);
-}
-// optional: tap to dismiss
-if (banner) banner.addEventListener('click', () => banner.classList.remove('show'));
-
-
-// MANAGE view: all tasks with edit/remove
+/* ---------- MANAGE view ---------- */
 function renderManage(tasks){
   manageList.innerHTML='';
-  tasks.forEach(t => manageList.append(manageRow(t)));
+  // Hide completed one-off tasks from Manage
+  tasks
+    .filter(t => !(t.freq_unit === 'once' && !t.is_active))
+    .forEach(t => manageList.append(manageRow(t)));
 }
 
 function taskRow(t){
   const row = document.createElement('div');
   row.className = 'card task';
+  const fc = freqClass(t.freq_unit);
+  if (fc) row.classList.add(fc);
 
   const title = document.createElement('div');
   title.className = 'title';
@@ -139,12 +173,15 @@ function taskRow(t){
   const meta = document.createElement('div');
   meta.className = 'meta';
   const last = t.last_done ? formatET(t.last_done) : 'never';
-  meta.textContent = `Last: ${last} • ${t.freq_unit === 'once' ? 'One-off' : `Every ${t.freq_value} ${t.freq_unit}`}`;
+  const freqLabel = (t.freq_unit === 'once') ? 'One-off' :
+                    (t.freq_unit === 'months' || t.freq_unit === 'month') ?
+                    `Every ${t.freq_value} months` : `Every ${t.freq_value} ${t.freq_unit}`;
+  meta.textContent = `Last: ${last} • ${freqLabel}`;
 
   const left = document.createElement('div');
   left.append(title, meta);
 
-  // Actions cluster (check, edit, trash)
+  // Actions cluster (✓ green, ✎ yellow, 🗑 red)
   const actions = document.createElement('div');
   actions.className = 'actions';
 
@@ -152,14 +189,14 @@ function taskRow(t){
     const res = await fetch(`/api/tasks/${t.id}/complete`, {method:'POST'});
     if (res.ok) showCongrats();
     await fetchAll();
-  });
-  const editBtn = iconBtn('✎', 'Edit', () => openEdit(t));
+  }, 'ok');
+  const editBtn = iconBtn('✎', 'Edit', () => openEdit(t), 'warn');
   const delBtn  = iconBtn('🗑', 'Delete', async () => {
     if(confirm(`Delete “${t.title}”?`)){
       await fetch(`/api/tasks/${t.id}`, {method:'DELETE'});
       await fetchAll();
     }
-  });
+  }, 'danger');
 
   actions.append(doneBtn, editBtn, delBtn);
   row.append(left, actions);
@@ -169,56 +206,117 @@ function taskRow(t){
 function manageRow(t){
   const row = document.createElement('div');
   row.className = 'card task';
+
+  // frequency-based color on manage page
+  const fc = freqClass(t.freq_unit);
+  if (fc) row.classList.add(fc);
+
   const title = document.createElement('div');
   title.className = 'title';
   title.textContent = t.title;
+
   const meta = document.createElement('div');
   meta.className = 'meta';
-  meta.textContent = (t.freq_unit === 'once')
-    ? 'One-off'
-    : `Every ${t.freq_value} ${t.freq_unit} • Active: ${t.is_active ? 'Yes' : 'No'}`;
+  const freqLabel = (t.freq_unit === 'once') ? 'One-off' :
+                    (t.freq_unit === 'months' || t.freq_unit === 'month')
+                      ? `Every ${t.freq_value} months`
+                      : `Every ${t.freq_value} ${t.freq_unit}`;
+  meta.textContent = `${freqLabel} • Active: ${t.is_active ? 'Yes' : 'No'}`;
+
   const left = document.createElement('div'); left.append(title, meta);
-  const editBtn = iconBtn('✎', 'Edit', () => openEdit(t));
+
+  // colored action buttons
+  const editBtn = iconBtn('✎', 'Edit', () => openEdit(t), 'warn');
   const delBtn  = iconBtn('🗑', 'Delete', async () => {
-    if(confirm(`Delete “${t.title}”?`)){
-      await fetch(`/api/tasks/${t.id}`, {method:'DELETE'});
+    if (confirm(`Delete “${t.title}”?`)) {
+      await fetch(`/api/tasks/${t.id}`, { method: 'DELETE' });
       await fetchAll();
     }
-  });
-  const actions = document.createElement('div'); actions.className='actions'; actions.append(editBtn, delBtn);
+  }, 'danger');
+
+  const actions = document.createElement('div');
+  actions.className='actions';
+  actions.append(editBtn, delBtn);
+
   row.append(left, actions);
   return row;
 }
 
-function iconBtn(text, title, onClick){
+function iconBtn(text, title, onClick, colorClass=''){
   const b = document.createElement('button');
-  b.className = 'iconbtn'; b.title = title; b.textContent = text; b.onclick = onClick; return b;
+  b.className = 'iconbtn' + (colorClass ? ' ' + colorClass : '');
+  b.title = title;
+  b.textContent = text;
+  b.onclick = onClick;
+  return b;
 }
+
+/* ---------- One-off helpers ---------- */
+function toUTCFromLocalDateTime(dateStr, timeStr){
+  if(!dateStr) return null;
+  let [y,m,d] = dateStr.split("-").map(Number);
+  let hh = 0, mm = 0;
+  if (timeStr && timeStr.includes(":")) {
+    [hh, mm] = timeStr.split(":").map(Number);
+  }
+  const local = new Date(y, (m||1)-1, d||1, hh||0, mm||0, 0);
+  return new Date(local.getTime() - local.getTimezoneOffset()*60000).toISOString();
+}
+function setOneOffFieldsFromISO(iso){
+  if(!iso || !dueDateInput || !dueTimeInput) return;
+  const d = toUTCDate(iso);
+  const pad = n => String(n).padStart(2,"0");
+  dueDateInput.value = `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
+  dueTimeInput.value = `${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+function syncOnceVisibility(){
+  if (!freqUnitSel || !onceRow) return;
+  const isOnce = freqUnitSel.value === 'once';
+  onceRow.style.display = isOnce ? '' : 'none';
+  if (form.freq_value) form.freq_value.required = !isOnce;
+  if (dueDateInput) dueDateInput.required = isOnce;
+  if (dueTimeInput) dueTimeInput.required = isOnce;
+}
+if (freqUnitSel) freqUnitSel.addEventListener('change', syncOnceVisibility);
 
 /* ---------- Sheet open/close ---------- */
 function openAdd(){
   editingId = null;
   $("#modalTitle").textContent = 'Add Task';
   form.reset();
-  freqUnitSel.value = 'days';
+  if (freqUnitSel) freqUnitSel.value = 'days';
   syncOnceVisibility();
+
+  // default one-off fields to today / next quarter-hour
+  if (dueDateInput && dueTimeInput){
+    const now = new Date();
+    const pad = n => String(n).padStart(2,"0");
+    const roundedMin = Math.ceil(now.getMinutes()/15)*15;
+    dueDateInput.value = `${now.getFullYear()}-${pad(now.getMonth()+1)}-${pad(now.getDate())}`;
+    const hh = (roundedMin === 60) ? (now.getHours()+1) % 24 : now.getHours();
+    const mm = (roundedMin === 60) ? 0 : roundedMin;
+    dueTimeInput.value = `${pad(hh)}:${pad(mm)}`;
+  }
+
   sheet.classList.remove('hidden');
   focusAtEnd(form.title);
 }
-
 function openEdit(t){
   editingId = t.id;
   $("#modalTitle").textContent = 'Edit Task';
   form.title.value = t.title;
-  form.notes.value = t.notes || '';
-  form.freq_value.value = t.freq_value;
-  form.freq_unit.value = t.freq_unit;
+  if (form.notes) form.notes.value = t.notes || '';
+  if (form.freq_value) form.freq_value.value = t.freq_value;
+  if (form.freq_unit) form.freq_unit.value = t.freq_unit;
   syncOnceVisibility();
-  if (t.freq_unit === 'once' && t.due_at) {
-    dueLocalInput.value = toLocalDTInputValue(t.due_at);
-  } else {
-    dueLocalInput.value = '';
+
+  if ((t.freq_unit === 'once') && t.due_at) {
+    setOneOffFieldsFromISO(t.due_at);
+  } else if (dueDateInput && dueTimeInput) {
+    dueDateInput.value = '';
+    dueTimeInput.value = '';
   }
+
   sheet.classList.remove('hidden');
   focusAtEnd(form.title);
 }
@@ -229,18 +327,24 @@ function closeSheet(){
 
 form.addEventListener('submit', async (e) => {
   e.preventDefault();
-  const isOnce = form.freq_unit.value === 'once';
+  const isOnce = form.freq_unit && form.freq_unit.value === 'once';
+
   const payload = {
     title: form.title.value.trim(),
-    notes: form.notes.value.trim(),
-    freq_value: isOnce ? 0 : Number(form.freq_value.value || 0),
-    freq_unit: form.freq_unit.value,
+    notes: form.notes ? form.notes.value.trim() : '',
+    freq_value: isOnce ? 0 : Number(form.freq_value ? form.freq_value.value : 0),
+    freq_unit: form.freq_unit ? form.freq_unit.value : 'days',
   };
+
   if (isOnce) {
-    const dueISO = fromLocalDTInputToUTCString(dueLocalInput.value);
+    const dueISO = toUTCFromLocalDateTime(
+      dueDateInput ? dueDateInput.value : '',
+      dueTimeInput ? dueTimeInput.value : ''
+    );
     if (!dueISO) { alert('Please choose a due date & time'); return; }
     payload.due_at = dueISO;
   }
+
   if(!payload.title) return;
 
   if(editingId){
@@ -261,10 +365,13 @@ form.addEventListener('submit', async (e) => {
 });
 
 // Nav buttons
-$("#addBtn").onclick = openAdd;
-$("#manageBtn").onclick = () => { homeView.classList.add('hidden'); manageView.classList.remove('hidden'); };
-$("#backHome").onclick = () => { manageView.classList.add('hidden'); homeView.classList.remove('hidden'); };
-cancelSheet.onclick = closeSheet;
+const addBtn = $("#addBtn");
+if (addBtn) addBtn.onclick = openAdd;
+const manageBtn = $("#manageBtn");
+if (manageBtn) manageBtn.onclick = () => { homeView.classList.add('hidden'); manageView.classList.remove('hidden'); };
+const backHome = $("#backHome");
+if (backHome) backHome.onclick = () => { manageView.classList.add('hidden'); homeView.classList.remove('hidden'); };
+if (cancelSheet) cancelSheet.onclick = closeSheet;
 
 /* -------- On-Screen Keyboard (OSK) -------- */
 const layouts = {
@@ -283,6 +390,7 @@ const layouts = {
 };
 
 function buildOSK(){
+  if (!oskRows) return;
   oskRows.innerHTML='';
   layouts[oskLayout].forEach(keys => {
     const r=document.createElement('div'); r.className='osk-row';
@@ -299,6 +407,7 @@ function buildOSK(){
 }
 
 function showOSK(target){
+  if (!osk) return;
   oskTarget = target;
   oskLayout = (target.type === 'number') ? 'number' : 'text';
   oskShift = false; buildOSK();
@@ -306,14 +415,11 @@ function showOSK(target){
   osk.hidden = false;
   focusAtEnd(oskTarget);
 }
-function hideOSK(){ osk.hidden = true; oskTarget=null; }
+function hideOSK(){ if (osk) osk.hidden = true; oskTarget=null; }
 
 function focusAtEnd(el){
   el.focus({preventScroll:true});
-  try {
-    const len = (el.value || '').length;
-    el.setSelectionRange(len, len);
-  } catch(_) {}
+  try { const len = (el.value || '').length; el.setSelectionRange(len, len); } catch(_){}
 }
 
 function insertAtCursor(el, text){
@@ -321,7 +427,7 @@ function insertAtCursor(el, text){
   const supportsSel = (typeof el.selectionStart === 'number' && typeof el.selectionEnd === 'number');
   if (!supportsSel || el.type === 'number') {
     el.value = (el.value || '') + text;
-    try { focusAtEnd(el); } catch(_) {}
+    try { focusAtEnd(el); } catch(_){}
   } else {
     const start = el.selectionStart ?? el.value.length;
     const end = el.selectionEnd ?? el.value.length;
@@ -329,7 +435,7 @@ function insertAtCursor(el, text){
     const after = el.value.slice(end);
     el.value = before + text + after;
     const pos = start + text.length;
-    try { el.setSelectionRange(pos, pos); } catch(_) {}
+    try { el.setSelectionRange(pos, pos); } catch(_){}
   }
   el.dispatchEvent(new Event('input',{bubbles:true}));
 }
@@ -373,11 +479,134 @@ function onOskKey(e){
   insertAtCursor(oskTarget, char);
 }
 
+const unicornImg = document.getElementById('unicornImg');
+if (unicornImg) {
+  unicornImg.dataset.srcIdle = unicornImg.getAttribute('src');
+  if (!unicornImg.dataset.srcCelebrate) {
+    unicornImg.dataset.srcCelebrate = '/img/unicorn_celebrate.png';
+  }
+}
+
 // Show OSK for relevant controls
-function wantsOSK(el){ return el.matches('input[type="text"], input:not([type]), textarea, input[type="number"]'); }
 document.addEventListener('focusin', (e) => {
-  const t=e.target; if(!(t instanceof HTMLElement)) return; if(wantsOSK(t)) showOSK(t);
+  const t=e.target; if(!(t instanceof HTMLElement)) return;
+  const wants = t.matches('input[type="text"], input:not([type]), textarea, input[type="number"]');
+  if (wants) showOSK(t);
 });
+
+/* ---------- Custom Date/Time Picker (for platforms without native pickers) ---------- */
+const picker = $('#picker');
+const pickerTitle = $('#pickerTitle');
+const pickerCal = $('#pickerCalendar');
+const pickerPrev = $('#pickerPrev');
+const pickerNext = $('#pickerNext');
+const pickerCancel = $('#pickerCancel');
+const pickerOk = $('#pickerOk');
+const hVal = $('#hVal'), mVal = $('#mVal');
+const hInc = $('#hInc'), hDec = $('#hDec'), mInc = $('#mInc'), mDec = $('#mDec');
+
+let pickDate; // Date object (local)
+let pickHour = 0, pickMin = 0;
+let activeTarget = null; // 'date' | 'time' | 'both'
+
+function openPicker(mode){
+  activeTarget = mode;
+  const now = new Date();
+  const seedDate = (dueDateInput && dueDateInput.value)
+      ? new Date(dueDateInput.value+'T00:00:00')
+      : now;
+  pickDate = new Date(seedDate.getFullYear(), seedDate.getMonth(), seedDate.getDate());
+  if (dueTimeInput && dueTimeInput.value) {
+    const [hh,mm] = dueTimeInput.value.split(':').map(x=>parseInt(x,10)||0);
+    pickHour = hh; pickMin = mm;
+  } else {
+    pickHour = now.getHours();
+    pickMin = Math.ceil(now.getMinutes()/15)*15; if (pickMin===60){pickMin=0; pickHour=(pickHour+1)%24;}
+  }
+  updateTimeDisplays();
+  buildCalendar();
+  picker.classList.remove('hidden');
+  hideOSK();
+}
+function closePicker(){ picker.classList.add('hidden'); }
+
+function monthTitle(d){
+  return d.toLocaleString(undefined,{month:'long', year:'numeric'});
+}
+function buildCalendar(){
+  pickerTitle.textContent = monthTitle(pickDate);
+  const y = pickDate.getFullYear(), m = pickDate.getMonth();
+  const first = new Date(y,m,1);
+  const startIdx = (first.getDay()+6)%7; // Mon=0
+  const daysInMonth = new Date(y,m+1,0).getDate();
+
+  const dow = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
+  pickerCal.innerHTML = '';
+  dow.forEach(d=>{
+    const el = document.createElement('div');
+    el.className = 'dow';
+    el.textContent = d;
+    pickerCal.appendChild(el);
+  });
+
+  for (let i=0;i<startIdx;i++){
+    const b = document.createElement('div'); b.className='day off'; pickerCal.appendChild(b);
+  }
+  for (let day=1; day<=daysInMonth; day++){
+    const d = document.createElement('button');
+    d.type='button'; d.className='day';
+    d.textContent = String(day);
+    if (day===pickDate.getDate()) d.classList.add('sel');
+    d.onclick = ()=>{
+      pickDate = new Date(y,m,day);
+      if (activeTarget==='date'){
+        applyPickToInputs();
+        closePicker();
+      } else {
+        buildCalendar();
+      }
+    };
+    pickerCal.appendChild(d);
+  }
+}
+
+function updateTimeDisplays(){
+  const pad=n=>String(n).padStart(2,'0');
+  hVal.textContent = pad(pickHour);
+  mVal.textContent = pad(pickMin);
+}
+hInc.onclick = ()=>{ pickHour=(pickHour+1)%24; updateTimeDisplays(); };
+hDec.onclick = ()=>{ pickHour=(pickHour+23)%24; updateTimeDisplays(); };
+mInc.onclick = ()=>{ pickMin=(pickMin+15)%60; updateTimeDisplays(); };
+mDec.onclick = ()=>{ pickMin=(pickMin+45)%60; updateTimeDisplays(); };
+
+pickerPrev.onclick = ()=>{ pickDate = new Date(pickDate.getFullYear(), pickDate.getMonth()-1, Math.min(28,pickDate.getDate())); buildCalendar(); };
+pickerNext.onclick = ()=>{ pickDate = new Date(pickDate.getFullYear(), pickDate.getMonth()+1, Math.min(28,pickDate.getDate())); buildCalendar(); };
+pickerCancel.onclick = closePicker;
+pickerOk.onclick = ()=>{ applyPickToInputs(); closePicker(); };
+
+function applyPickToInputs(){
+  if (dueDateInput){
+    const pad=n=>String(n).padStart(2,'0');
+    dueDateInput.value = `${pickDate.getFullYear()}-${pad(pickDate.getMonth()+1)}-${pad(pickDate.getDate())}`;
+  }
+  if (dueTimeInput){
+    const pad=n=>String(n).padStart(2,'0');
+    dueTimeInput.value = `${pad(pickHour)}:${pad(pickMin)}`;
+  }
+  dueDateInput?.dispatchEvent(new Event('input',{bubbles:true}));
+  dueTimeInput?.dispatchEvent(new Event('input',{bubbles:true}));
+}
+
+// Always use our picker on Pi (more reliable), but still keep inputs for value display
+if (dueDateInput){
+  dueDateInput.addEventListener('focus', (e)=>{ e.preventDefault(); dueDateInput.blur(); openPicker('date'); });
+  dueDateInput.addEventListener('click', (e)=>{ e.preventDefault(); dueDateInput.blur(); openPicker('date'); });
+}
+if (dueTimeInput){
+  dueTimeInput.addEventListener('focus', (e)=>{ e.preventDefault(); dueTimeInput.blur(); openPicker('time'); });
+  dueTimeInput.addEventListener('click', (e)=>{ e.preventDefault(); dueTimeInput.blur(); openPicker('time'); });
+}
 
 // Boot
 fetchAll();

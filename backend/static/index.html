@@ -7,13 +7,14 @@
     <link rel="stylesheet" href="/styles.css"/>
 </head>
 <body>
+<!-- Top time bar -->
 <header class="bar">
     <div id="clock" aria-live="polite"></div>
     <div class="spacer"></div>
 </header>
 
 <main class="grid">
-    <!-- Left column: content -->
+    <!-- Left column: scrollable content -->
     <div class="content">
         <!-- HOME VIEW: only tasks due today -->
         <div id="homeView">
@@ -38,7 +39,7 @@
         </div>
     </div>
 
-    <!-- Right column: sidebar -->
+    <!-- Right column: sidebar (fixed) -->
     <aside class="sidebar">
         <div class="stack">
             <button id="manageBtn" class="btn secondary pill wfull">Manage Tasks</button>
@@ -48,10 +49,11 @@
 </main>
 
 <!-- Bottom-right unicorn (decorative) -->
-<div class="card unicorn-floating" aria-hidden="true">
-    <h3>
-        Cute<br/>Unicorn<br/>Character<br/>Here 🦄
-    </h3>
+<div class="unicorn-floating" aria-hidden="true">
+    <img id="unicornImg"
+         src="/img/unicorn_idle.png"
+         data-celebrate="/img/unicorn_celebrate.png"
+         alt="Unicorn friend"/>
 </div>
 
 <!-- Fullscreen Sheet for Add/Edit (keeps OSK accessible) -->
@@ -59,9 +61,11 @@
     <div class="sheet-body">
         <form id="taskForm" class="modal" autocomplete="off">
             <h3 id="modalTitle">Add Task</h3>
+
             <label>Title
                 <input required name="title" placeholder="Task title" inputmode="latin"/>
             </label>
+
             <label>Notes
                 <textarea name="notes" rows="2" placeholder="Optional"></textarea>
             </label>
@@ -81,8 +85,11 @@
 
             <!-- One-off due date/time (shown only when freq_unit=once) -->
             <div class="row" id="onceRow" style="display:none">
-                <label class="inline" style="width:100%">Due date & time
-                    <input name="due_local" id="dueLocal" type="datetime-local" step="60"/>
+                <label class="inline" style="flex:1">Due date
+                    <input name="due_date" id="dueDate" type="date"/>
+                </label>
+                <label class="inline" style="flex:1">Time
+                    <input name="due_time" id="dueTime" type="time" step="900"/>
                 </label>
             </div>
 
@@ -99,8 +106,46 @@
     </div>
 </div>
 
+<!-- Bottom banner -->
 <div id="congratsBanner" class="banner" role="status" aria-live="polite" aria-atomic="true">
     🎉 Congratulations, you did it!
+</div>
+
+<!-- Custom Date/Time Picker (shows if native pickers are unavailable) -->
+<div id="picker" class="picker hidden" aria-hidden="true">
+    <div class="picker-card">
+        <div class="picker-head">
+            <button id="pickerPrev" class="iconbtn sm">‹</button>
+            <div id="pickerTitle" class="picker-title"></div>
+            <button id="pickerNext" class="iconbtn sm">›</button>
+        </div>
+
+        <div id="pickerCalendar" class="cal"></div>
+
+        <div class="time-row">
+            <div class="time-box">
+                <div class="time-label">Hour</div>
+                <div class="spin">
+                    <button class="iconbtn sm" id="hDec">−</button>
+                    <div id="hVal" class="time-val">00</div>
+                    <button class="iconbtn sm" id="hInc">+</button>
+                </div>
+            </div>
+            <div class="time-box">
+                <div class="time-label">Min</div>
+                <div class="spin">
+                    <button class="iconbtn sm" id="mDec">−</button>
+                    <div id="mVal" class="time-val">00</div>
+                    <button class="iconbtn sm" id="mInc">+</button>
+                </div>
+            </div>
+        </div>
+
+        <div class="picker-actions">
+            <button id="pickerCancel" class="btn secondary">Cancel</button>
+            <button id="pickerOk" class="btn">Set</button>
+        </div>
+    </div>
 </div>
 
 <script src="/app.js"></script>

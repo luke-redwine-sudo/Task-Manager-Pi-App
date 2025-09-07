@@ -1,9 +1,36 @@
 :root{
-  --bg:#fafafa; --fg:#111; --muted:#555; --acc:#0066ff;
-  --ok:#0a7a24; --due:#b00020; --card:#fff;
-  --radius:18px; --pad:12px; --touch:64px;
-  --barH: 60px; /* header height for layout calc */
-  --indent: 18px; /* indentation for lists under banners */
+  /* Palette */
+  --bg:#e8eaee;            /* main body light gray */
+  --fg:#0f1115;            /* default text */
+  --muted:#6b7280;         /* secondary text */
+
+  --header-bg:#2b2f36;     /* dark gray time bar */
+  --header-fg:#f5f3eb;     /* off-white text for header */
+
+  --card:#1f232a;          /* dark card base (used in modals, non-colored cards) */
+  --card-fg:#f3f4f6;
+
+  --btn:#3b82f6;           /* primary button */
+  --btn-fg:#ffffff;
+  --btn-secondary:#374151; /* secondary/dark button */
+  --btn-secondary-fg:#f3f4f6;
+
+  --radius:18px;
+  --pad:12px;
+  --touch:64px;
+  --barH: 60px;            /* header height for layout calc */
+  --indent: 18px;          /* indentation for lists under banners */
+
+  /* Task frequency colors */
+  --freq-day:#b8e986;      /* green */
+  --freq-week:#ffe082;     /* yellow */
+  --freq-month:#ff8a80;    /* red */
+  --freq-once:#80d8ff;     /* blue */
+
+  /* Action button colors */
+  --ok:#10b981;            /* green */
+  --warn:#fbbf24;          /* yellow */
+  --danger:#ef4444;        /* red */
 }
 *{box-sizing:border-box}
 .hidden{display:none!important}
@@ -11,18 +38,22 @@
 .wfull{width:100%}
 html,body{height:100%}
 body{
-  margin:0; font-family:system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,"Helvetica Neue",Arial;
-  background:var(--bg); color:var(--fg); font-size:18px;
+  margin:0;
+  font-family:system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,"Helvetica Neue",Arial;
+  background:var(--bg);
+  color:var(--fg);
+  font-size:18px;
 }
 
-/* Header */
+/* Header (time bar) */
 .bar{
   display:flex;align-items:center;gap:.5rem;
-  padding:.5rem .75rem;border-bottom:1px solid #ddd;
-  background:var(--card);position:sticky;top:0;z-index:2;
+  padding:.5rem .75rem;border-bottom:1px solid #000;
+  background:var(--header-bg);position:sticky;top:0;z-index:2;
   min-height: var(--barH);
+  color: var(--header-fg);
 }
-#clock{font-weight:600;font-size:1.05rem}
+#clock{font-weight:700;font-size:1.05rem}
 .spacer{flex:1}
 
 /* 2-column grid pinned to viewport */
@@ -51,12 +82,13 @@ main.grid{
 h2{
   margin:.25rem 0 .25rem;
   padding:.7rem 1rem;
-  background:var(--card);
-  border:8px solid #000;             /* thicker */
+  background:#111;                /* darker banner for dark-mode look */
+  color:#fafafa;
+  border:8px solid #000;          /* thicker */
   border-radius:22px;
-  width:100%;                         /* span the scroll area */
-  font-size:1.3rem;                   /* already larger */
-  font-weight:800;
+  width:100%;                     /* span the scroll area */
+  font-size:1.35rem;              /* big text */
+  font-weight:900;
   letter-spacing:.02em;
 }
 
@@ -68,70 +100,144 @@ h2{
 
 .list{display:flex;flex-direction:column;gap:.6rem}
 
-/* Card look: rounded thick border */
-.card{background:var(--card); border:2px solid #000; border-radius:16px; padding:.6rem}
+/* Card look: dark default (used for non-colored cards) */
+.card{
+  background:var(--card);
+  color:var(--card-fg);
+  border:2px solid #000;
+  border-radius:16px;
+  padding:.6rem;
+}
 
 /* Task rows */
 .task{display:grid; grid-template-columns:1fr auto; align-items:center; gap:.5rem}
-.task .title{font-size:1.15rem; line-height:1.25}
-.task .meta{font-size:.95rem; color:var(--muted); margin-top:.25rem}
+.task .title{font-size:1.15rem; line-height:1.25; color:#0b0b0b}
+.task .meta{font-size:.95rem; color:rgba(0,0,0,.72); margin-top:.25rem}
 .actions{display:flex; align-items:center; gap:.4rem}
 
+/* Frequency-based task background colors (affect both main + manage + completed) */
+.task.freq-days{   background: var(--freq-day);   color:#0b0b0b }
+.task.freq-weeks{  background: var(--freq-week);  color:#0b0b0b }
+.task.freq-months{ background: var(--freq-month); color:#0b0b0b }
+.task.freq-once{   background: var(--freq-once);  color:#0b0b0b }
+
 /* Buttons */
-.btn{min-height:var(--touch);min-width:var(--touch);border:2px solid #000;background:var(--acc);color:#fff;font-weight:700;padding:.55rem 1.1rem;font-size:1rem;touch-action:manipulation;border-radius:28px}
-.btn.secondary{background:#e9e9e9;color:#111}
-.iconbtn{width:52px;height:52px;font-size:1.1rem;display:grid;place-items:center;border-radius:12px;border:2px solid #000;background:#fff}
+.btn{
+  min-height:var(--touch);min-width:var(--touch);
+  border:2px solid #000;background:var(--btn);color:var(--btn-fg);
+  font-weight:800;padding:.55rem 1.1rem;font-size:1rem;
+  touch-action:manipulation;border-radius:28px
+}
+.btn.secondary{background:var(--btn-secondary); color:var(--btn-secondary-fg)}
+.iconbtn{
+  width:52px;height:52px;font-size:1.1rem;display:grid;place-items:center;
+  border-radius:12px;border:2px solid #000;background:#111;color:#fafafa
+}
+.iconbtn.sm{width:42px;height:42px;font-size:1rem}
+.iconbtn.ok{    background: var(--ok);    color:#000 }   /* ✓ green */
+.iconbtn.warn{  background: var(--warn);  color:#000 }   /* ✎ yellow */
+.iconbtn.danger{background: var(--danger);color:#fff }   /* 🗑 red */
 .iconbtn:active,.btn:active{transform:translateY(1px)}
 
 /* Manage view header */
-.manage-head{display:flex; align-items:center; gap:.5rem}
+.manage-head{
+  display:flex;
+  align-items:center;
+  gap:.5rem;
+  margin-bottom:.75rem;    /* <-- add spacing below the header */
+}
+
+/* (optional) small top margin for the list in manage view */
+#manageView .list{
+  margin-top:.25rem;
+}
 
 /* Fullscreen sheet for input (keeps OSK on top) */
-.sheet{position:fixed; inset:0; display:grid; grid-template-rows:1fr auto; background:rgba(0,0,0,.1); z-index:10}
+.sheet{position:fixed; inset:0; display:grid; grid-template-rows:1fr auto; background:rgba(0,0,0,.35); z-index:10}
 .sheet-body{overflow:auto; padding:.75rem}
-.sheet .modal{background:var(--card); border:2px solid #000; border-radius:18px; padding:.75rem; max-width:560px; margin:0 auto}
+.sheet .modal{
+  background:#13161b; color:#e5e7eb;
+  border:2px solid #000; border-radius:18px; padding:.75rem; max-width:560px; margin:0 auto
+}
 .modal label{display:block; margin:.5rem 0}
-.modal input,.modal textarea,.modal select{width:100%; padding:.7rem .8rem; border-radius:12px; border:1px solid #aaa; font-size:1rem}
+.modal input,.modal textarea,.modal select{
+  width:100%; padding:.7rem .8rem; border-radius:12px; border:1px solid #374151; font-size:1rem;
+  background:#0d1117; color:#e5e7eb;
+}
 .modal .row{display:flex; gap:.5rem; align-items:center}
 
-/* On-Screen Keyboard */
-.osk{position:sticky; bottom:0; background:var(--card); border-top:2px solid #000; box-shadow:0 -6px 20px rgba(0,0,0,.08); z-index:11; padding:.5rem; margin-top:.75rem}
+/* On-Screen Keyboard (dark) */
+.osk{
+  position:sticky; bottom:0; background:#0f1318; color:#e5e7eb;
+  border-top:2px solid #000; box-shadow:0 -6px 20px rgba(0,0,0,.4); z-index:11; padding:.5rem; margin-top:.75rem
+}
 .osk[hidden]{display:none}
 .osk-rows{display:grid; gap:.35rem}
 .osk-row{display:flex; gap:.35rem; justify-content:center}
-.osk-key{flex:1 0 auto; min-width:44px; height:56px; border:2px solid #000; border-radius:12px; background:#fff; font-size:1.1rem; font-weight:600; display:grid; place-items:center; user-select:none}
+.osk-key{
+  flex:1 0 auto; min-width:44px; height:56px; border:2px solid #000; border-radius:12px;
+  background:#151a21; color:#f3f4f6; font-size:1.1rem; font-weight:700; display:grid; place-items:center; user-select:none
+}
 .osk-key.wide{flex:2 0 auto}
 .osk-key.space{min-width:40vw}
 .osk-key:active{transform:translateY(1px)}
 
-/* Unicorn fixed in bottom-right corner */
+/* Bottom toast banner (dark style) */
+.banner{
+  position: fixed; left: 0; right: 0; bottom: 0;
+  transform: translateY(110%); transition: transform .25s ease-out, opacity .25s ease-out;
+  opacity: 0; z-index: 6;
+  background:#111; color:#f3f4f6;
+  border-top: 8px solid #000; box-shadow: 0 -8px 24px rgba(0,0,0,.45);
+  padding: .9rem 1rem; text-align: center; font-weight: 900; font-size: 1.15rem;
+}
+.banner.show{ transform: translateY(0); opacity: 1; }
+
 .unicorn-floating{
   position: fixed;
   right: 12px;
   bottom: 12px;
-  width: 220px;
-  z-index: 1;        /* below the sheet/keyboard */
-  pointer-events: none; /* decorative */
+  z-index: 1;
+  pointer-events: none; /* decorative, doesn’t block taps */
+}
+.unicorn-floating img{
+  width: 200px;          /* adjust if you want bigger/smaller */
+  height: auto;
+  display: block;
+  filter: drop-shadow(0 6px 14px rgba(0,0,0,.35));
+  border-radius: 14px;   /* remove if you prefer sharp corners */
 }
 
-.banner{
-  position: fixed;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  transform: translateY(110%);      /* hidden off-screen */
-  transition: transform .25s ease-out, opacity .25s ease-out;
-  opacity: 0;
-  z-index: 6;                       /* above content, below sheet/keyboard */
-  background: var(--card);
-  border-top: 8px solid #000;       /* thick top edge per your style */
-  box-shadow: 0 -8px 24px rgba(0,0,0,.15);
-  padding: .9rem 1rem;
-  text-align: center;
-  font-weight: 800;
-  font-size: 1.15rem;
+/* Picker (calendar + time) */
+.picker{
+  position: fixed; inset:0; background: rgba(0,0,0,.45);
+  display:flex; align-items:flex-end; justify-content:center;
+  z-index: 12;
 }
-.banner.show{
-  transform: translateY(0);
-  opacity: 1;
+.picker.hidden{display:none}
+.picker-card{
+  width: 560px; max-width: 96vw;
+  background:#0f1217; color:#e5e7eb;
+  border:2px solid #000; border-radius:18px 18px 0 0;
+  box-shadow: 0 -12px 32px rgba(0,0,0,.5);
+  padding: .75rem;
 }
+.picker-head{display:flex; align-items:center; justify-content:space-between; margin-bottom:.5rem}
+.picker-title{font-weight:800; font-size:1.1rem}
+.cal{
+  display:grid; grid-template-columns: repeat(7, 1fr); gap:.35rem; margin-bottom:.5rem;
+}
+.cal .dow{font-size:.9rem; color:#a3a7ae; text-align:center; padding:.25rem 0}
+.cal .day{height:46px; display:grid; place-items:center; border:2px solid #000; border-radius:10px; background:#161b22; cursor:pointer}
+.cal .day.off{opacity:.35}
+.cal .day.sel{background:#2563eb; color:#fff}
+.time-row{display:flex; gap:1rem; justify-content:center; margin:.25rem 0 .75rem}
+.time-box{display:flex; flex-direction:column; align-items:center; gap:.25rem}
+.time-label{font-size:.9rem; color:#a3a7ae}
+.spin{display:flex; align-items:center; gap:.5rem}
+.time-val{min-width:48px; text-align:center; font-weight:800; font-size:1.1rem}
+.picker-actions{display:flex; justify-content:flex-end; gap:.5rem}
+
+/* Scrollbar */
+.content::-webkit-scrollbar{width:10px}
+.content::-webkit-scrollbar-thumb{background:#a3a7ae;border:2px solid transparent;border-radius:8px;background-clip:padding-box}
