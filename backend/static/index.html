@@ -65,16 +65,27 @@
             <label>Notes
                 <textarea name="notes" rows="2" placeholder="Optional"></textarea>
             </label>
+
+            <!-- Frequency / One-off selector -->
             <div class="row">
                 <label class="inline">Every
-                    <input required name="freq_value" type="number" inputmode="numeric" min="1" value="1" style="width:5rem"/>
+                    <input name="freq_value" type="number" inputmode="numeric" min="1" value="1" style="width:5rem"/>
                 </label>
-                <select name="freq_unit">
+                <select name="freq_unit" id="freqUnit">
                     <option value="hours">hours</option>
                     <option value="days" selected>days</option>
                     <option value="weeks">weeks</option>
+                    <option value="once">one-off</option>
                 </select>
             </div>
+
+            <!-- One-off due date/time (shown only when freq_unit=once) -->
+            <div class="row" id="onceRow" style="display:none">
+                <label class="inline" style="width:100%">Due date & time
+                    <input name="due_local" id="dueLocal" type="datetime-local" step="60"/>
+                </label>
+            </div>
+
             <menu>
                 <button type="button" id="cancelSheet" class="btn secondary pill">Cancel</button>
                 <button id="saveTask" class="btn pill">Save</button>
@@ -86,6 +97,10 @@
     <div id="osk" class="osk" aria-hidden="true" hidden>
         <div id="oskRows" class="osk-rows"></div>
     </div>
+</div>
+
+<div id="congratsBanner" class="banner" role="status" aria-live="polite" aria-atomic="true">
+    🎉 Congratulations, you did it!
 </div>
 
 <script src="/app.js"></script>

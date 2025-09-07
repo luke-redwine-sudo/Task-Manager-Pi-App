@@ -113,3 +113,25 @@ h2{
   z-index: 1;        /* below the sheet/keyboard */
   pointer-events: none; /* decorative */
 }
+
+.banner{
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  transform: translateY(110%);      /* hidden off-screen */
+  transition: transform .25s ease-out, opacity .25s ease-out;
+  opacity: 0;
+  z-index: 6;                       /* above content, below sheet/keyboard */
+  background: var(--card);
+  border-top: 8px solid #000;       /* thick top edge per your style */
+  box-shadow: 0 -8px 24px rgba(0,0,0,.15);
+  padding: .9rem 1rem;
+  text-align: center;
+  font-weight: 800;
+  font-size: 1.15rem;
+}
+.banner.show{
+  transform: translateY(0);
+  opacity: 1;
+}

@@ -11,6 +11,9 @@ const manageList = $("#manageList");
 const sheet = $("#taskSheet");
 const form = $("#taskForm");
 const cancelSheet = $("#cancelSheet");
+const freqUnitSel = $("#freqUnit");
+const onceRow = $("#onceRow");
+const dueLocalInput = $("#dueLocal");
 let editingId = null;
 
 // OSK
@@ -37,6 +40,24 @@ function toUTCDate(v){
 }
 const formatET = (v) => fmtET.format(toUTCDate(v));
 
+function toLocalDTInputValue(isoOrDate){
+  const d = toUTCDate(isoOrDate);
+  // Convert to local yyyy-MM-ddThh:mm for <input type="datetime-local">
+  const pad = (n)=> String(n).padStart(2,'0');
+  const yyyy = d.getFullYear();
+  const mm = pad(d.getMonth()+1);
+  const dd = pad(d.getDate());
+  const hh = pad(d.getHours());
+  const mi = pad(d.getMinutes());
+  return `${yyyy}-${mm}-${dd}T${hh}:${mi}`;
+}
+function fromLocalDTInputToUTCString(localStr){
+  // localStr is local time; convert to UTC ISO with Z
+  if(!localStr) return null;
+  const d = new Date(localStr);
+  return new Date(d.getTime() - d.getTimezoneOffset()*60000).toISOString();
+}
+
 // Clock in ET
 function tickClock(){ $("#clock").textContent = formatET(new Date()); }
 setInterval(tickClock, 1000); tickClock();
@@ -51,6 +72,16 @@ async function fetchAll(){
   renderHome(tasks, logs);
   renderManage(tasks);
 }
+
+// Show one-off row depending on selection
+function syncOnceVisibility(){
+  const isOnce = freqUnitSel.value === 'once';
+  onceRow.style.display = isOnce ? '' : 'none';
+  form.freq_value.required = !isOnce;
+  dueLocalInput.required = isOnce;
+}
+
+freqUnitSel.addEventListener('change', syncOnceVisibility);
 
 function isDueToday(dueISO){
   const now = new Date();
@@ -78,6 +109,19 @@ function renderHome(tasks, logs){
   });
 }
 
+const banner = document.getElementById('congratsBanner');
+let bannerTimer = null;
+function showCongrats(msg = "🎉 Congratulations, you did it!") {
+  if (!banner) return;
+  banner.textContent = msg;
+  banner.classList.add('show');
+  if (bannerTimer) clearTimeout(bannerTimer);
+  bannerTimer = setTimeout(() => banner.classList.remove('show'), 2500);
+}
+// optional: tap to dismiss
+if (banner) banner.addEventListener('click', () => banner.classList.remove('show'));
+
+
 // MANAGE view: all tasks with edit/remove
 function renderManage(tasks){
   manageList.innerHTML='';
@@ -95,7 +139,7 @@ function taskRow(t){
   const meta = document.createElement('div');
   meta.className = 'meta';
   const last = t.last_done ? formatET(t.last_done) : 'never';
-  meta.textContent = `Last: ${last} • Every ${t.freq_value} ${t.freq_unit}`;
+  meta.textContent = `Last: ${last} • ${t.freq_unit === 'once' ? 'One-off' : `Every ${t.freq_value} ${t.freq_unit}`}`;
 
   const left = document.createElement('div');
   left.append(title, meta);
@@ -105,7 +149,8 @@ function taskRow(t){
   actions.className = 'actions';
 
   const doneBtn = iconBtn('✓', 'Mark complete', async () => {
-    await fetch(`/api/tasks/${t.id}/complete`, {method:'POST'});
+    const res = await fetch(`/api/tasks/${t.id}/complete`, {method:'POST'});
+    if (res.ok) showCongrats();
     await fetchAll();
   });
   const editBtn = iconBtn('✎', 'Edit', () => openEdit(t));
@@ -129,7 +174,9 @@ function manageRow(t){
   title.textContent = t.title;
   const meta = document.createElement('div');
   meta.className = 'meta';
-  meta.textContent = `Every ${t.freq_value} ${t.freq_unit} • Active: ${t.is_active ? 'Yes' : 'No'}`;
+  meta.textContent = (t.freq_unit === 'once')
+    ? 'One-off'
+    : `Every ${t.freq_value} ${t.freq_unit} • Active: ${t.is_active ? 'Yes' : 'No'}`;
   const left = document.createElement('div'); left.append(title, meta);
   const editBtn = iconBtn('✎', 'Edit', () => openEdit(t));
   const delBtn  = iconBtn('🗑', 'Delete', async () => {
@@ -153,9 +200,12 @@ function openAdd(){
   editingId = null;
   $("#modalTitle").textContent = 'Add Task';
   form.reset();
+  freqUnitSel.value = 'days';
+  syncOnceVisibility();
   sheet.classList.remove('hidden');
   focusAtEnd(form.title);
 }
+
 function openEdit(t){
   editingId = t.id;
   $("#modalTitle").textContent = 'Edit Task';
@@ -163,6 +213,12 @@ function openEdit(t){
   form.notes.value = t.notes || '';
   form.freq_value.value = t.freq_value;
   form.freq_unit.value = t.freq_unit;
+  syncOnceVisibility();
+  if (t.freq_unit === 'once' && t.due_at) {
+    dueLocalInput.value = toLocalDTInputValue(t.due_at);
+  } else {
+    dueLocalInput.value = '';
+  }
   sheet.classList.remove('hidden');
   focusAtEnd(form.title);
 }
@@ -173,18 +229,32 @@ function closeSheet(){
 
 form.addEventListener('submit', async (e) => {
   e.preventDefault();
+  const isOnce = form.freq_unit.value === 'once';
   const payload = {
     title: form.title.value.trim(),
     notes: form.notes.value.trim(),
-    freq_value: Number(form.freq_value.value),
+    freq_value: isOnce ? 0 : Number(form.freq_value.value || 0),
     freq_unit: form.freq_unit.value,
   };
+  if (isOnce) {
+    const dueISO = fromLocalDTInputToUTCString(dueLocalInput.value);
+    if (!dueISO) { alert('Please choose a due date & time'); return; }
+    payload.due_at = dueISO;
+  }
   if(!payload.title) return;
 
   if(editingId){
-    await fetch(`/api/tasks/${editingId}`, { method: 'PUT', headers: { 'Content-Type':'application/json' }, body: JSON.stringify(payload)});
+    await fetch(`/api/tasks/${editingId}`, {
+      method: 'PUT',
+      headers: { 'Content-Type':'application/json' },
+      body: JSON.stringify(payload)
+    });
   } else {
-    await fetch('/api/tasks', { method: 'POST', headers: { 'Content-Type':'application/json' }, body: JSON.stringify(payload)});
+    await fetch('/api/tasks', {
+      method: 'POST',
+      headers: { 'Content-Type':'application/json' },
+      body: JSON.stringify(payload)
+    });
   }
   closeSheet();
   await fetchAll();
@@ -197,7 +267,6 @@ $("#backHome").onclick = () => { manageView.classList.add('hidden'); homeView.cl
 cancelSheet.onclick = closeSheet;
 
 /* -------- On-Screen Keyboard (OSK) -------- */
-
 const layouts = {
   text: [
     ['q','w','e','r','t','y','u','i','o','p'],
@@ -221,7 +290,6 @@ function buildOSK(){
       const b=document.createElement('button'); b.type='button';
       b.className='osk-key'+(k==='space'?' space':'')+(k==='enter'?' wide':'');
       b.textContent=oskShift && k.length===1 ? k.toUpperCase():k; b.dataset.key=k;
-      // Prevent input losing focus on mousedown/touchstart
       b.addEventListener('mousedown', (e)=>e.preventDefault());
       b.addEventListener('touchstart', (e)=>e.preventDefault(), {passive:false});
       b.addEventListener('click', onOskKey);
@@ -234,7 +302,7 @@ function showOSK(target){
   oskTarget = target;
   oskLayout = (target.type === 'number') ? 'number' : 'text';
   oskShift = false; buildOSK();
-  sheet.appendChild(osk); // keep keyboard within sheet
+  sheet.appendChild(osk);
   osk.hidden = false;
   focusAtEnd(oskTarget);
 }
@@ -245,9 +313,7 @@ function focusAtEnd(el){
   try {
     const len = (el.value || '').length;
     el.setSelectionRange(len, len);
-  } catch(_) {
-    /* setSelectionRange isn't supported on type=number in some browsers */
-  }
+  } catch(_) {}
 }
 
 function insertAtCursor(el, text){
