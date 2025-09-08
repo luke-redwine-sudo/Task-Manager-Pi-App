@@ -1,28 +1,32 @@
-from datetime import datetime
-from sqlalchemy import Column, Integer, String, Boolean, DateTime, ForeignKey
+# models.py
+from sqlalchemy import Column, Integer, String, Text, DateTime, Boolean, ForeignKey, func
 from sqlalchemy.orm import relationship
 from db import Base
 
 class Task(Base):
     __tablename__ = "tasks"
-    id = Column(Integer, primary_key=True)
-    title = Column(String, nullable=False)
-    notes = Column(String, nullable=True)
-    freq_value = Column(Integer, nullable=False, default=1)  # e.g., 3
-    freq_unit = Column(String, nullable=False, default="days")  # "hours|days|weeks"
-    is_active = Column(Boolean, nullable=False, default=True)
-    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
-    updated_at = Column(DateTime, default=datetime.utcnow, nullable=False)
 
-    # two-way mapping; Task.logs <-> TaskLog.task
+    id         = Column(Integer, primary_key=True)
+    title      = Column(String(255), nullable=False)
+    notes      = Column(Text)
+    freq_value = Column(Integer, nullable=False, default=1)
+    freq_unit  = Column(String(16), nullable=False, default="days")  # days|weeks|months|once
+    is_active  = Column(Boolean, nullable=False, default=True)
+
+    # NEW: explicit due date for one-off tasks (UTC, stored naive)
+    due_at     = Column(DateTime, nullable=True)
+
+    created_at = Column(DateTime, nullable=False, server_default=func.now())
+    updated_at = Column(DateTime, nullable=False, server_default=func.now(), onupdate=func.now())
+
     logs = relationship("TaskLog", back_populates="task", cascade="all, delete-orphan")
 
 class TaskLog(Base):
     __tablename__ = "task_logs"
-    id = Column(Integer, primary_key=True)
-    task_id = Column(Integer, ForeignKey("tasks.id", ondelete="CASCADE"), nullable=False)
-    # snapshot the task title at the time of completion
-    title = Column(String, nullable=True, default=None)
-    done_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+
+    id       = Column(Integer, primary_key=True)
+    task_id  = Column(Integer, ForeignKey("tasks.id", ondelete="CASCADE"), index=True, nullable=False)
+    title    = Column(String(255))  # denormalized snapshot of the task title
+    done_at  = Column(DateTime, nullable=False, server_default=func.now())
 
     task = relationship("Task", back_populates="logs")

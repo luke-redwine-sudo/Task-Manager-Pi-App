@@ -1,36 +1,36 @@
 :root{
   /* Palette */
-  --bg:#e8eaee;            /* main body light gray */
-  --fg:#0f1115;            /* default text */
-  --muted:#6b7280;         /* secondary text */
+  --bg:#0d1117;
+  --fg:#e5e7eb;
+  --muted:#9aa0a6;
 
-  --header-bg:#2b2f36;     /* dark gray time bar */
-  --header-fg:#f5f3eb;     /* off-white text for header */
+  --header-bg:#2b2f36;
+  --header-fg:#f5f3eb;
 
-  --card:#1f232a;          /* dark card base (used in modals, non-colored cards) */
+  --card:#1f232a;
   --card-fg:#f3f4f6;
 
-  --btn:#3b82f6;           /* primary button */
+  --btn:#3b82f6;
   --btn-fg:#ffffff;
-  --btn-secondary:#374151; /* secondary/dark button */
+  --btn-secondary:#374151;
   --btn-secondary-fg:#f3f4f6;
 
   --radius:18px;
   --pad:12px;
   --touch:64px;
-  --barH: 60px;            /* header height for layout calc */
-  --indent: 18px;          /* indentation for lists under banners */
+  --barH: 60px;
+  --indent: 18px;
 
-  /* Task frequency colors */
-  --freq-day:#b8e986;      /* green */
-  --freq-week:#ffe082;     /* yellow */
-  --freq-month:#ff8a80;    /* red */
-  --freq-once:#80d8ff;     /* blue */
+  /* Frequency colors */
+  --freq-day:#b8e986;
+  --freq-week:#ffe082;
+  --freq-month:#ff8a80;
+  --freq-once:#80d8ff;
 
   /* Action button colors */
-  --ok:#10b981;            /* green */
-  --warn:#fbbf24;          /* yellow */
-  --danger:#ef4444;        /* red */
+  --ok:#10b981;
+  --warn:#fbbf24;
+  --danger:#ef4444;
 }
 *{box-sizing:border-box}
 .hidden{display:none!important}
@@ -72,35 +72,35 @@ main.grid{
   overflow-y: auto;
   -webkit-overflow-scrolling: touch;
   padding-right: 4px;
+  background:#0b0e13;
+  border-radius: 16px;
+  padding: .5rem;
 }
 
 /* Sidebar */
 .sidebar{position:relative}
 .sidebar .stack{position:sticky; top:68px; display:flex; flex-direction:column; gap:12px}
 
-/* Section headers — full width, thicker border, bigger text */
+/* Section headers (thicker banners) */
 h2{
   margin:.25rem 0 .25rem;
   padding:.7rem 1rem;
-  background:#111;                /* darker banner for dark-mode look */
+  background:#111;
   color:#fafafa;
-  border:8px solid #000;          /* thicker */
+  border:8px solid #000;
   border-radius:22px;
-  width:100%;                     /* span the scroll area */
-  font-size:1.35rem;              /* big text */
+  width:100%;
+  font-size:1.35rem;
   font-weight:900;
   letter-spacing:.02em;
 }
 
-/* Indent lists under the Task and Completed banners */
-#taskList,
-#completedList{
-  padding-left: var(--indent);
-}
+/* Indent lists under the banners */
+#taskList, #completedList{ padding-left: var(--indent); }
 
 .list{display:flex;flex-direction:column;gap:.6rem}
 
-/* Card look: dark default (used for non-colored cards) */
+/* Card base */
 .card{
   background:var(--card);
   color:var(--card-fg);
@@ -115,7 +115,7 @@ h2{
 .task .meta{font-size:.95rem; color:rgba(0,0,0,.72); margin-top:.25rem}
 .actions{display:flex; align-items:center; gap:.4rem}
 
-/* Frequency-based task background colors (affect both main + manage + completed) */
+/* Frequency coloring */
 .task.freq-days{   background: var(--freq-day);   color:#0b0b0b }
 .task.freq-weeks{  background: var(--freq-week);  color:#0b0b0b }
 .task.freq-months{ background: var(--freq-month); color:#0b0b0b }
@@ -134,25 +134,17 @@ h2{
   border-radius:12px;border:2px solid #000;background:#111;color:#fafafa
 }
 .iconbtn.sm{width:42px;height:42px;font-size:1rem}
-.iconbtn.ok{    background: var(--ok);    color:#000 }   /* ✓ green */
-.iconbtn.warn{  background: var(--warn);  color:#000 }   /* ✎ yellow */
-.iconbtn.danger{background: var(--danger);color:#fff }   /* 🗑 red */
+.iconbtn.ok{    background: var(--ok);    color:#000 }
+.iconbtn.warn{  background: var(--warn);  color:#000 }
+.iconbtn.danger{background: var(--danger);color:#fff }
 .iconbtn:active,.btn:active{transform:translateY(1px)}
 
 /* Manage view header */
 .manage-head{
-  display:flex;
-  align-items:center;
-  gap:.5rem;
-  margin-bottom:.75rem;    /* <-- add spacing below the header */
+  display:flex; align-items:center; gap:.5rem; margin-bottom:.75rem;
 }
 
-/* (optional) small top margin for the list in manage view */
-#manageView .list{
-  margin-top:.25rem;
-}
-
-/* Fullscreen sheet for input (keeps OSK on top) */
+/* Sheet / Inputs */
 .sheet{position:fixed; inset:0; display:grid; grid-template-rows:1fr auto; background:rgba(0,0,0,.35); z-index:10}
 .sheet-body{overflow:auto; padding:.75rem}
 .sheet .modal{
@@ -166,7 +158,7 @@ h2{
 }
 .modal .row{display:flex; gap:.5rem; align-items:center}
 
-/* On-Screen Keyboard (dark) */
+/* On-Screen Keyboard */
 .osk{
   position:sticky; bottom:0; background:#0f1318; color:#e5e7eb;
   border-top:2px solid #000; box-shadow:0 -6px 20px rgba(0,0,0,.4); z-index:11; padding:.5rem; margin-top:.75rem
@@ -182,7 +174,7 @@ h2{
 .osk-key.space{min-width:40vw}
 .osk-key:active{transform:translateY(1px)}
 
-/* Bottom toast banner (dark style) */
+/* Toast banner */
 .banner{
   position: fixed; left: 0; right: 0; bottom: 0;
   transform: translateY(110%); transition: transform .25s ease-out, opacity .25s ease-out;
@@ -193,51 +185,85 @@ h2{
 }
 .banner.show{ transform: translateY(0); opacity: 1; }
 
+/* Unicorn image (bottom-right) */
 .unicorn-floating{
   position: fixed;
   right: 12px;
   bottom: 12px;
   z-index: 1;
-  pointer-events: none; /* decorative, doesn’t block taps */
+  pointer-events: none;
 }
 .unicorn-floating img{
-  width: 200px;          /* adjust if you want bigger/smaller */
+  width: 200px;
   height: auto;
   display: block;
   filter: drop-shadow(0 6px 14px rgba(0,0,0,.35));
-  border-radius: 14px;   /* remove if you prefer sharp corners */
+  border-radius: 14px;
 }
 
-/* Picker (calendar + time) */
-.picker{
-  position: fixed; inset:0; background: rgba(0,0,0,.45);
-  display:flex; align-items:flex-end; justify-content:center;
-  z-index: 12;
+/* ===== ALL DONE OVERLAY ===== */
+.all-done{
+  position: fixed; inset: 0; z-index: 50;
+  display: grid; place-items: center;
 }
-.picker.hidden{display:none}
-.picker-card{
-  width: 560px; max-width: 96vw;
-  background:#0f1217; color:#e5e7eb;
-  border:2px solid #000; border-radius:18px 18px 0 0;
-  box-shadow: 0 -12px 32px rgba(0,0,0,.5);
-  padding: .75rem;
+.all-done.hidden{ display: none !important; }
+
+.all-done-bg{ position:absolute; inset:0; overflow:hidden; }
+.all-done-bg img{
+  position:absolute; inset:0; width:100%; height:100%; object-fit:cover;
+  filter: blur(6px) saturate(0.9) brightness(0.65);
+  transform: scale(1.05);
 }
-.picker-head{display:flex; align-items:center; justify-content:space-between; margin-bottom:.5rem}
-.picker-title{font-weight:800; font-size:1.1rem}
-.cal{
-  display:grid; grid-template-columns: repeat(7, 1fr); gap:.35rem; margin-bottom:.5rem;
+.all-done-bg .scrim{
+  position:absolute; inset:0;
+  background: radial-gradient( circle at 50% 60%, rgba(0,0,0,.25), rgba(0,0,0,.7) );
 }
-.cal .dow{font-size:.9rem; color:#a3a7ae; text-align:center; padding:.25rem 0}
-.cal .day{height:46px; display:grid; place-items:center; border:2px solid #000; border-radius:10px; background:#161b22; cursor:pointer}
-.cal .day.off{opacity:.35}
-.cal .day.sel{background:#2563eb; color:#fff}
-.time-row{display:flex; gap:1rem; justify-content:center; margin:.25rem 0 .75rem}
-.time-box{display:flex; flex-direction:column; align-items:center; gap:.25rem}
-.time-label{font-size:.9rem; color:#a3a7ae}
-.spin{display:flex; align-items:center; gap:.5rem}
-.time-val{min-width:48px; text-align:center; font-weight:800; font-size:1.1rem}
-.picker-actions{display:flex; justify-content:flex-end; gap:.5rem}
+.all-done-content{
+  position: relative; z-index: 2; text-align: center; color: #fff;
+  max-width: 90vw; padding: 1rem;
+}
+.all-done-content h1{
+  font-size: 2rem; line-height: 1.2; margin: 0 0 .5rem;
+  text-shadow: 0 2px 8px rgba(0,0,0,.6);
+}
+.all-done-content p{ margin: 0 0 1rem; color: #f3f4f6; }
+#confetti{ position:absolute; inset:0; pointer-events:none; z-index:1; overflow:hidden; }
+.confetti{
+  position:absolute; bottom:-16px; width:10px; height:16px; border-radius:2px;
+  opacity: 0.98; transform: translate3d(0,0,0) rotate(0deg);
+  animation: confettiArc var(--dur,1300ms) cubic-bezier(.18,.65,.2,1) forwards;
+  will-change: transform, opacity;
+}
+.confetti.l{ left: 0; transform-origin: left bottom; }
+.confetti.r{ right: 0; transform-origin: right bottom; }
+@keyframes confettiArc{
+  0%   { transform: translate(0,0) rotate(0deg); opacity:1; }
+  60%  { transform: translate(var(--dx,40vw), var(--dy,-70vh)) rotate(var(--rot,540deg)); opacity:1; }
+  100% { transform: translate(calc(var(--dx,40vw) * 1.05), calc(var(--dy,-70vh) * 0.85)) rotate(calc(var(--rot,540deg) * 1.15)); opacity:0; }
+}
+
+/* ===== Picker ===== */
+.picker{ position: fixed; inset:0; display:grid; place-items:center; background:rgba(0,0,0,.45); z-index: 12; }
+.picker.hidden{ display:none !important; }
+.picker-panel{
+  background:#13161b; color:#e5e7eb; border:2px solid #000; border-radius:18px;
+  width:min(520px, 92vw); max-height: 88vh; overflow:auto; padding:.75rem;
+}
+.picker-head{ display:flex; align-items:center; justify-content:space-between; gap:.5rem; margin-bottom:.5rem; }
+.picker-title{ font-weight:800; font-size:1.1rem; }
+.picker-cal{
+  display:grid; grid-template-columns: repeat(7, 1fr); gap:.25rem; margin-bottom:.5rem;
+}
+.picker-cal .dow{ text-align:center; font-size:.9rem; opacity:.8; padding:.25rem 0; }
+.picker-cal .day{ padding:.5rem 0; border-radius:10px; border:2px solid #000; background:#0d1117; color:#e5e7eb; font-weight:700; }
+.picker-cal .day.sel{ background:#3b82f6; color:#fff; }
+.picker-cal .day.off{ opacity:.2; }
+.picker-time{ display:flex; align-items:center; justify-content:center; gap:.75rem; margin:.25rem 0 .6rem; }
+.time-col{ display:grid; grid-template-rows: auto 1fr auto; place-items:center; gap:.25rem; }
+.time-val{ font-size:1.6rem; font-weight:900; padding:.25rem .75rem; background:#0d1117; border:2px solid #000; border-radius:12px; min-width:3.5ch; text-align:center; }
+.time-sep{ font-size:1.5rem; font-weight:900; opacity:.9; }
+.picker-actions{ display:flex; justify-content:flex-end; gap:.5rem; }
 
 /* Scrollbar */
 .content::-webkit-scrollbar{width:10px}
-.content::-webkit-scrollbar-thumb{background:#a3a7ae;border:2px solid transparent;border-radius:8px;background-clip:padding-box}
+.content::-webkit-scrollbar-thumb{background:#4b5563;border:2px solid transparent;border-radius:8px;background-clip:padding-box}

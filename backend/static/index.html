@@ -48,7 +48,7 @@
     </aside>
 </main>
 
-<!-- Bottom-right unicorn (decorative) -->
+<!-- Bottom-right unicorn image -->
 <div class="unicorn-floating" aria-hidden="true">
     <img id="unicornImg"
          src="/img/unicorn_idle.png"
@@ -56,7 +56,7 @@
          alt="Unicorn friend"/>
 </div>
 
-<!-- Fullscreen Sheet for Add/Edit (keeps OSK accessible) -->
+<!-- Fullscreen Sheet for Add/Edit -->
 <div id="taskSheet" class="sheet hidden" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
     <div class="sheet-body">
         <form id="taskForm" class="modal" autocomplete="off">
@@ -71,7 +71,7 @@
             </label>
 
             <!-- Frequency / One-off selector -->
-            <div class="row">
+            <div class="row" id="freqRow">
                 <label class="inline">Every
                     <input name="freq_value" type="number" inputmode="numeric" min="1" value="1" style="width:5rem"/>
                 </label>
@@ -79,6 +79,7 @@
                     <option value="hours">hours</option>
                     <option value="days" selected>days</option>
                     <option value="weeks">weeks</option>
+                    <option value="months">months</option>
                     <option value="once">one-off</option>
                 </select>
             </div>
@@ -98,6 +99,35 @@
                 <button id="saveTask" class="btn pill">Save</button>
             </menu>
         </form>
+
+        <!-- Custom Date/Time Picker (shown over sheet) -->
+        <div id="picker" class="picker hidden" role="dialog" aria-modal="true">
+            <div class="picker-panel">
+                <div class="picker-head">
+                    <button type="button" id="pickerPrev" class="iconbtn sm">‹</button>
+                    <div id="pickerTitle" class="picker-title"></div>
+                    <button type="button" id="pickerNext" class="iconbtn sm">›</button>
+                </div>
+                <div id="pickerCalendar" class="picker-cal"></div>
+                <div class="picker-time">
+                    <div class="time-col">
+                        <button type="button" id="hInc" class="btn secondary">▲</button>
+                        <div id="hVal" class="time-val">12</div>
+                        <button type="button" id="hDec" class="btn secondary">▼</button>
+                    </div>
+                    <div class="time-sep">:</div>
+                    <div class="time-col">
+                        <button type="button" id="mInc" class="btn secondary">▲</button>
+                        <div id="mVal" class="time-val">00</div>
+                        <button type="button" id="mDec" class="btn secondary">▼</button>
+                    </div>
+                </div>
+                <div class="picker-actions">
+                    <button type="button" id="pickerCancel" class="btn secondary pill">Cancel</button>
+                    <button type="button" id="pickerOk" class="btn pill">OK</button>
+                </div>
+            </div>
+        </div>
     </div>
 
     <!-- On-Screen Keyboard lives inside the sheet -->
@@ -106,46 +136,23 @@
     </div>
 </div>
 
-<!-- Bottom banner -->
+<!-- Bottom toast banner -->
 <div id="congratsBanner" class="banner" role="status" aria-live="polite" aria-atomic="true">
     🎉 Congratulations, you did it!
 </div>
 
-<!-- Custom Date/Time Picker (shows if native pickers are unavailable) -->
-<div id="picker" class="picker hidden" aria-hidden="true">
-    <div class="picker-card">
-        <div class="picker-head">
-            <button id="pickerPrev" class="iconbtn sm">‹</button>
-            <div id="pickerTitle" class="picker-title"></div>
-            <button id="pickerNext" class="iconbtn sm">›</button>
-        </div>
-
-        <div id="pickerCalendar" class="cal"></div>
-
-        <div class="time-row">
-            <div class="time-box">
-                <div class="time-label">Hour</div>
-                <div class="spin">
-                    <button class="iconbtn sm" id="hDec">−</button>
-                    <div id="hVal" class="time-val">00</div>
-                    <button class="iconbtn sm" id="hInc">+</button>
-                </div>
-            </div>
-            <div class="time-box">
-                <div class="time-label">Min</div>
-                <div class="spin">
-                    <button class="iconbtn sm" id="mDec">−</button>
-                    <div id="mVal" class="time-val">00</div>
-                    <button class="iconbtn sm" id="mInc">+</button>
-                </div>
-            </div>
-        </div>
-
-        <div class="picker-actions">
-            <button id="pickerCancel" class="btn secondary">Cancel</button>
-            <button id="pickerOk" class="btn">Set</button>
-        </div>
+<!-- ALL DONE OVERLAY -->
+<div id="allDoneOverlay" class="all-done hidden" aria-hidden="true">
+    <div class="all-done-bg">
+        <img src="/img/unicorn_idle.png" alt=""/>
+        <div class="scrim"></div>
     </div>
+    <div class="all-done-content">
+        <h1>🎉 You completed all your tasks for today!</h1>
+        <p>Fantastic work — enjoy the rest of your day.</p>
+        <button id="allDoneDismiss" class="btn pill">OK</button>
+    </div>
+    <div id="confetti" aria-hidden="true"></div>
 </div>
 
 <script src="/app.js"></script>

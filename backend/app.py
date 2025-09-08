@@ -1,10 +1,11 @@
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 import os
 from flask import Flask, jsonify, request, send_from_directory
 from flask_cors import CORS
 from sqlalchemy import select, func, text
 from db import Base, engine, SessionLocal
 from models import Task, TaskLog
+import re
 
 app = Flask(__name__, static_folder="static", static_url_path="/")
 CORS(app)
@@ -15,16 +16,36 @@ Base.metadata.create_all(bind=engine)
 # --- lightweight migrations ---
 def ensure_schema():
     with engine.begin() as conn:
-        # 1) Add TaskLog.title if missing (you already had this)
+        # task_logs.title
         cols_logs = [row[1] for row in conn.execute(text("PRAGMA table_info(task_logs)"))]
         if "title" not in cols_logs:
             conn.execute(text("ALTER TABLE task_logs ADD COLUMN title VARCHAR"))
 
-        # 2) Add tasks.due_at (TEXT) for one-off tasks if missing
+        # tasks.due_at
         cols_tasks = [row[1] for row in conn.execute(text("PRAGMA table_info(tasks)"))]
         if "due_at" not in cols_tasks:
-            conn.execute(text("ALTER TABLE tasks ADD COLUMN due_at TEXT"))
+            conn.execute(text("ALTER TABLE tasks ADD COLUMN due_at TIMESTAMP NULL"))
+def normalize_due_at_values():
+    """Fix any malformed text values in tasks.due_at (e.g., '+00:00Z')."""
+    with SessionLocal() as db:
+        rows = db.execute(text("SELECT id, due_at FROM tasks WHERE due_at IS NOT NULL")).fetchall()
+        fixed = 0
+        for id_, raw in rows:
+            # Some SQLite drivers hand back strings for TIMESTAMP columns
+            if isinstance(raw, str):
+                try:
+                    dt = parse_lenient_iso_to_naive_utc(raw)
+                except Exception:
+                    continue
+                if dt is not None:
+                    db.execute(text("UPDATE tasks SET due_at = :dt WHERE id = :id"), {"dt": dt, "id": id_})
+                    fixed += 1
+        if fixed:
+            db.commit()
+
 ensure_schema()
+normalize_due_at_values()
+
 
 # ---------- Helpers ----------
 def get_db():
@@ -36,23 +57,53 @@ def get_db():
 
 FREQ_TO_SECONDS = {"hours": 3600, "days": 86400, "weeks": 604800}
 
-def parse_iso_utc(s: str) -> datetime:
-    """Parse ISO8601; if it ends with 'Z' treat as UTC; otherwise assume UTC naive."""
-    s = (s or "").strip()
+# app.py (helpers)
+def parse_iso_utc(s: str | None):
     if not s:
-        raise ValueError("empty datetime")
-    if s.endswith("Z"):
-        s = s[:-1] + "+00:00"
+        return None
     try:
-        return datetime.fromisoformat(s)
-    except Exception as e:
-        raise ValueError(f"invalid datetime: {s}") from e
+        # Accept 'Z' and offsets; store naive UTC (SQLite)
+        if s.endswith("Z"):
+            s = s[:-1] + "+00:00"
+        dt = datetime.fromisoformat(s)
+        if dt.tzinfo:
+            dt = dt.astimezone(timezone.utc).replace(tzinfo=None)
+        return dt
+    except Exception:
+        return None
 
-def iso_utc(d: datetime) -> str:
-    """Return ISO8601 string with trailing 'Z' (UTC)."""
-    # treat incoming naive datetimes as UTC
+
+def parse_lenient_iso_to_naive_utc(s: str | None):
+    """
+    Accepts '2025-09-07T18:30:00Z', '...+00:00', or even the bad '...+00:00Z'.
+    Returns a naive UTC datetime (tzinfo=None) for SQLite.
+    """
+    if not s:
+        return None
+    s = s.strip()
+    if s.endswith("Z") and re.search(r"[+-]\d{2}:?\d{2}$", s[:-1]):
+        s = s[:-1]                     # drop the stray Z if an offset is present
+    if s.endswith("Z"):
+        s = s[:-1] + "+00:00"          # make 'Z' parseable
+
+    try:
+        dt = datetime.fromisoformat(s)
+    except Exception:
+        # last resort: strip a trailing offset/Z and parse as naive
+        s2 = re.sub(r"([+-]\d{2}:?\d{2}|Z)$", "", s)
+        dt = datetime.fromisoformat(s2)
+
+    if dt.tzinfo:
+        dt = dt.astimezone(timezone.utc).replace(tzinfo=None)
+    return dt
+
+def iso_utc(d: datetime | None):
+    """Safe ISO string for JSON. Returns None if d is None."""
+    if d is None:
+        return None
+    if d.tzinfo:
+        d = d.astimezone(timezone.utc).replace(tzinfo=None)
     return d.replace(microsecond=0).isoformat() + "Z"
-
 def get_oneoff_due_map(db):
     """Return {task_id: due_at_datetime or None} for tasks where freq_unit='once'."""
     with engine.begin() as conn:
@@ -68,18 +119,30 @@ def get_oneoff_due_map(db):
             due_map[tid] = None
     return due_map
 
-def set_oneoff_due(task_id: int, due_iso: str | None):
-    """Persist tasks.due_at via raw SQL (models.py unchanged)."""
+def set_oneoff_due(task_id: int, dt_val):
+    """
+    Stores due_at for a one-off task. Accepts str or datetime.
+    Ignores if dt_val is None/invalid. Writes a naive UTC datetime.
+    """
+    if dt_val is None:
+        return False
+
+    if isinstance(dt_val, str):
+        dt = parse_lenient_iso_to_naive_utc(dt_val)
+    else:
+        dt = dt_val
+        if dt and dt.tzinfo:
+            dt = dt.astimezone(timezone.utc).replace(tzinfo=None)
+
+    if not dt:
+        return False
+
     with engine.begin() as conn:
-        if due_iso is None:
-            conn.execute(text("UPDATE tasks SET due_at = NULL WHERE id = :id"), {"id": task_id})
-        else:
-            # normalize to Z string
-            dt_val = parse_iso_utc(due_iso)
-            conn.execute(
-                text("UPDATE tasks SET due_at = :due WHERE id = :id"),
-                {"due": iso_utc(dt_val), "id": task_id},
-            )
+        conn.execute(
+            text("UPDATE tasks SET due_at = :dt WHERE id = :id"),
+            {"dt": dt, "id": task_id},
+        )
+    return True
 
 # ---------- API ----------
 @app.get("/api/tasks")
@@ -87,81 +150,67 @@ def list_tasks():
     db = next(get_db())
     tasks = db.execute(select(Task)).scalars().all()
 
-    # last-done lookup (for repeating schedules)
+    # last done per task
     last_map = {
-        tid: ts for tid, ts in db.query(TaskLog.task_id, func.max(TaskLog.done_at))
+        tid: ts
+        for tid, ts in db.query(TaskLog.task_id, func.max(TaskLog.done_at))
         .group_by(TaskLog.task_id).all()
     }
 
-    # read one-off due_at values (stored in tasks.due_at TEXT)
-    oneoff_due = get_oneoff_due_map(db)
-
     payload = []
     now = datetime.utcnow()
-    for t in tasks:
-        last_done = last_map.get(t.id)
 
+    for t in tasks:
         if t.freq_unit == "once":
-            # Exact due comes from tasks.due_at (if missing, fall back to created_at)
-            due_at_dt = oneoff_due.get(t.id) or (last_done or t.created_at)
-            is_due = now >= due_at_dt
-            payload.append({
-                "id": t.id,
-                "title": t.title,
-                "notes": t.notes,
-                "freq_value": t.freq_value,
-                "freq_unit": t.freq_unit,
-                "is_active": t.is_active,
-                "last_done": last_done.isoformat() + "Z" if last_done else None,
-                "due_at": iso_utc(due_at_dt),
-                "is_due": is_due,
-            })
+            # one-off tasks use their explicit due_at; fall back to created_at if missing
+            due_at = t.due_at or t.created_at
         else:
-            # Repeating: compute from last_done (or created_at) + interval
-            seconds = FREQ_TO_SECONDS.get(t.freq_unit, 86400) * max(int(t.freq_value or 1), 1)
-            due_at_dt = (last_done or t.created_at) + timedelta(seconds=seconds)
-            is_due = now >= due_at_dt
-            payload.append({
-                "id": t.id,
-                "title": t.title,
-                "notes": t.notes,
-                "freq_value": t.freq_value,
-                "freq_unit": t.freq_unit,
-                "is_active": t.is_active,
-                "last_done": last_done.isoformat() + "Z" if last_done else None,
-                "due_at": iso_utc(due_at_dt),
-                "is_due": is_due,
-            })
+            # recurring tasks: last_done + freq
+            base = last_map.get(t.id) or t.created_at
+            seconds = FREQ_TO_SECONDS.get(t.freq_unit, 86400) * t.freq_value
+            due_at = base + timedelta(seconds=seconds)
+
+        is_due = now >= due_at
+
+        payload.append({
+            "id": t.id,
+            "title": t.title,
+            "notes": t.notes,
+            "freq_value": t.freq_value,
+            "freq_unit": t.freq_unit,
+            "is_active": t.is_active,
+            "last_done": (last_map.get(t.id).isoformat() if last_map.get(t.id) else None),
+            "due_at": due_at.isoformat(),
+            "is_due": is_due,
+        })
+
     return jsonify(payload)
+
 
 @app.post("/api/tasks")
 def create_task():
     db = next(get_db())
     data = request.get_json(force=True)
 
-    freq_unit = data.get("freq_unit", "days")
-    freq_value = int(data.get("freq_value", 1))
+    unit = data.get("freq_unit", "days")
+    due_dt = None
+    if unit == "once":
+        due_dt = parse_lenient_iso_to_naive_utc(data.get("due_at"))
+        if due_dt is None:
+            return jsonify({"error": "Missing or invalid due_at for one-off task"}), 400
+
     t = Task(
         title=data.get("title", "Untitled"),
         notes=data.get("notes"),
-        freq_value=0 if freq_unit == "once" else freq_value,
-        freq_unit=freq_unit,
+        freq_value=int(data.get("freq_value", 0 if unit == "once" else 1)),
+        freq_unit=unit,
         is_active=True,
+        due_at=due_dt,
     )
     db.add(t)
     db.commit()
-
-    # For one-off, require due_at and store in tasks.due_at (TEXT, ISO Z)
-    if freq_unit == "once":
-        due_at = data.get("due_at")
-        if not due_at:
-            return jsonify({"error": "due_at required for one-off task"}), 400
-        try:
-            set_oneoff_due(t.id, due_at)
-        except ValueError:
-            return jsonify({"error": "invalid due_at"}), 400
-
     return jsonify({"id": t.id}), 201
+
 
 @app.put("/api/tasks/<int:task_id>")
 def update_task(task_id: int):
@@ -171,45 +220,28 @@ def update_task(task_id: int):
         return jsonify({"error": "Not found"}), 404
 
     data = request.get_json(force=True)
-    old_unit = t.freq_unit
 
+    # basic fields
     for k in ["title", "notes", "freq_value", "freq_unit", "is_active"]:
         if k in data:
             setattr(t, k, data[k])
 
-    # Normalize values
-    t.freq_unit = t.freq_unit or "days"
-    if t.freq_unit != "once":
-        try:
-            t.freq_value = max(int(t.freq_value or 1), 1)
-        except Exception:
-            t.freq_value = 1
-    else:
-        # one-off stores no repeating interval
+    # one-off handling
+    if t.freq_unit == "once":
+        if "due_at" in data:
+            t.due_at = parse_iso_utc(data.get("due_at"))
+        # freq_value isn't used for once; keep it 0
         t.freq_value = 0
+    else:
+        # recurring task: clear any stale due_at
+        t.due_at = None
+        if not t.freq_value:
+            t.freq_value = 1
 
     t.updated_at = datetime.utcnow()
     db.commit()
-
-    # handle due_at persistence when one-off
-    if t.freq_unit == "once":
-        due_at = data.get("due_at")
-        if due_at:
-            try:
-                set_oneoff_due(task_id, due_at)
-            except ValueError:
-                return jsonify({"error": "invalid due_at"}), 400
-        else:
-            # if switching to once and we have no stored due_at yet, require it
-            oneoff_due = get_oneoff_due_map(db).get(task_id)
-            if oneoff_due is None and old_unit != "once":
-                return jsonify({"error": "due_at required when switching to one-off"}), 400
-    else:
-        # switching away from once: clear due_at
-        if old_unit == "once":
-            set_oneoff_due(task_id, None)
-
     return jsonify({"ok": True})
+
 
 @app.delete("/api/tasks/<int:task_id>")
 def delete_task(task_id: int):

@@ -13,6 +13,7 @@ const form = $("#taskForm");
 const cancelSheet = $("#cancelSheet");
 const freqUnitSel = document.getElementById("freqUnit");
 const onceRow      = document.getElementById("onceRow");
+const freqRow      = document.getElementById("freqRow");
 const dueDateInput = document.getElementById("dueDate");
 const dueTimeInput = document.getElementById("dueTime");
 let editingId = null;
@@ -23,6 +24,15 @@ const oskRows = $("#oskRows");
 let oskShift = false;
 let oskLayout = 'text';
 let oskTarget = null;
+
+// Unicorn image handle
+const unicornImg = document.getElementById('unicornImg');
+if (unicornImg) {
+  unicornImg.dataset.srcIdle = unicornImg.getAttribute('src');
+  if (!unicornImg.dataset.srcCelebrate) {
+    unicornImg.dataset.srcCelebrate = '/img/unicorn_celebrate.png';
+  }
+}
 
 /* ---- Eastern Time formatter + safe UTC parsing ---- */
 const fmtET = new Intl.DateTimeFormat('en-US', {
@@ -56,28 +66,88 @@ function showCongrats(msg = "🎉 Congratulations, you did it!") {
     banner.textContent = msg;
     banner.classList.add('show');
     if (bannerTimer) clearTimeout(bannerTimer);
-    bannerTimer = setTimeout(() => banner.classList.remove('show'), 4500);
+    bannerTimer = setTimeout(() => banner.classList.remove('show'), 5000);
   }
-
   // 🦄 swap unicorn image briefly
   if (unicornImg) {
     const idle = unicornImg.dataset.srcIdle || unicornImg.src;
     const party = unicornImg.dataset.srcCelebrate || idle;
     unicornImg.src = party;
     clearTimeout(unicornImg._swapTimer);
-    unicornImg._swapTimer = setTimeout(() => { unicornImg.src = idle; }, 4000);
+    unicornImg._swapTimer = setTimeout(() => { unicornImg.src = idle; }, 4500);
   }
 }
-if (banner) banner.addEventListener('click', () => banner.classList.remove('show'));
 
-// Clock in ET (auto-refresh lists at midnight ET)
+// ALL DONE overlay state
+const allDoneEl = document.getElementById('allDoneOverlay');
+const allDoneDismiss = document.getElementById('allDoneDismiss');
+const confettiWrap = document.getElementById('confetti');
+let overlayDismissed = false;
+
+if (allDoneDismiss) {
+  allDoneDismiss.addEventListener('click', () => {
+    overlayDismissed = true;
+    hideAllDone();
+  });
+}
+
+function showAllDone(){
+  if (!allDoneEl) return;
+  allDoneEl.classList.remove('hidden');
+  makeConfetti();
+}
+function hideAllDone(){
+  if (!allDoneEl) return;
+  allDoneEl.classList.add('hidden');
+  clearConfetti();
+}
+
+/* ---------- better confetti ---------- */
+function makeConfetti(){
+  if (!confettiWrap) return;
+  clearConfetti();
+  const colors = ['#f87171','#34d399','#60a5fa','#fbbf24','#a78bfa','#f472b6','#22d3ee','#fde68a'];
+  const pieces = 120;
+  for (let i=0;i<pieces;i++){
+    const span = document.createElement('span');
+    const leftSide = i % 2 === 0;
+    span.className = 'confetti ' + (leftSide ? 'l' : 'r');
+    span.style.background = colors[i % colors.length];
+
+    const w = 6 + Math.random()*8;
+    const h = 10 + Math.random()*12;
+    span.style.width = `${w}px`;
+    span.style.height = `${h}px`;
+    span.style.borderRadius = `${Math.random()<0.3 ? 50 : 2}px`;
+
+    const dx = (30 + Math.random()*18) * (leftSide ? 1 : -1); // vw
+    const dy = - (55 + Math.random()*22);                      // vh
+    span.style.setProperty('--dx', dx+'vw');
+    span.style.setProperty('--dy', dy+'vh');
+
+    const rot = (leftSide ? 360 : -360) * (1 + Math.random()*1.2);
+    span.style.setProperty('--rot', rot+'deg');
+    span.style.setProperty('--dur', (1100 + Math.random()*700)+'ms');
+    span.style.animationDelay = (Math.random()*220)+'ms';
+
+    confettiWrap.appendChild(span);
+  }
+  setTimeout(clearConfetti, 2200);
+}
+function clearConfetti(){
+  if (!confettiWrap) return;
+  confettiWrap.innerHTML = '';
+}
+
+// Clock in ET (auto-refresh lists at midnight ET and reset overlay dismissal)
 function tickClock(){
   const now = new Date();
   $("#clock").textContent = formatET(now);
   const key = etDayKey(now);
   if (key !== currentDayKey) {
     currentDayKey = key;   // new day in ET
-    fetchAll();            // re-render so Completed clears for the new day
+    overlayDismissed = false;
+    fetchAll();            // re-render everything
   }
 }
 setInterval(tickClock, 1000); tickClock();
@@ -88,10 +158,25 @@ async function fetchAll(){
     fetch('/api/tasks'),
     fetch('/api/logs')
   ]);
+
+  if (!tasksRes.ok) {
+    const txt = await tasksRes.text().catch(()=>'(no body)');
+    console.error('GET /api/tasks failed', tasksRes.status, txt);
+    alert('Server error loading tasks. Check the backend logs in the container.');
+    return;
+  }
+  if (!logsRes.ok) {
+    const txt = await logsRes.text().catch(()=>'(no body)');
+    console.error('GET /api/logs failed', logsRes.status, txt);
+    alert('Server error loading logs. Check the backend logs in the container.');
+    return;
+  }
+
   const [tasks, logs] = await Promise.all([tasksRes.json(), logsRes.json()]);
   renderHome(tasks, logs);
   renderManage(tasks);
 }
+
 
 function isDueToday(dueISO){
   const now = new Date();
@@ -120,10 +205,11 @@ function renderHome(tasks, logs){
   const freqMap = new Map(tasks.map(t => [t.id, t.freq_unit]));
 
   // Tasks due today
-  tasks
+  const dueToday = tasks
     .filter(t => t.is_active && isDueToday(t.due_at))
-    .sort((a,b)=> toUTCDate(a.due_at)-toUTCDate(b.due_at))
-    .forEach(t => taskList.append(taskRow(t)));
+    .sort((a,b)=> toUTCDate(a.due_at)-toUTCDate(b.due_at));
+
+  dueToday.forEach(t => taskList.append(taskRow(t)));
 
   // Completed list (today only in ET, color-coded)
   logs
@@ -146,9 +232,16 @@ function renderHome(tasks, logs){
       const left = document.createElement('div');
       left.append(title, meta);
 
-      row.append(left); // no actions for completed items
+      row.append(left);
       completedList.append(row);
     });
+
+  // Full-screen "All Done" overlay when no tasks left today
+  if (dueToday.length === 0 && !overlayDismissed) {
+    showAllDone();
+  } else {
+    hideAllDone();
+  }
 }
 
 /* ---------- MANAGE view ---------- */
@@ -181,7 +274,7 @@ function taskRow(t){
   const left = document.createElement('div');
   left.append(title, meta);
 
-  // Actions cluster (✓ green, ✎ yellow, 🗑 red)
+  // Actions (✓ green, ✎ yellow, 🗑 red)
   const actions = document.createElement('div');
   actions.className = 'actions';
 
@@ -207,7 +300,6 @@ function manageRow(t){
   const row = document.createElement('div');
   row.className = 'card task';
 
-  // frequency-based color on manage page
   const fc = freqClass(t.freq_unit);
   if (fc) row.classList.add(fc);
 
@@ -225,7 +317,6 @@ function manageRow(t){
 
   const left = document.createElement('div'); left.append(title, meta);
 
-  // colored action buttons
   const editBtn = iconBtn('✎', 'Edit', () => openEdit(t), 'warn');
   const delBtn  = iconBtn('🗑', 'Delete', async () => {
     if (confirm(`Delete “${t.title}”?`)) {
@@ -266,18 +357,47 @@ function setOneOffFieldsFromISO(iso){
   if(!iso || !dueDateInput || !dueTimeInput) return;
   const d = toUTCDate(iso);
   const pad = n => String(n).padStart(2,"0");
+  const rounded = roundToQuarter(d.getHours(), d.getMinutes());
   dueDateInput.value = `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
-  dueTimeInput.value = `${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  dueTimeInput.value = `${pad(rounded.hh)}:${pad(rounded.mm)}`;
+  clampTimeInputToQuarter();
 }
 function syncOnceVisibility(){
   if (!freqUnitSel || !onceRow) return;
   const isOnce = freqUnitSel.value === 'once';
+
+  // Show one-off date/time row when one-off
   onceRow.style.display = isOnce ? '' : 'none';
-  if (form.freq_value) form.freq_value.required = !isOnce;
+
+  // Hide frequency row entirely for one-off
+  if (freqRow) freqRow.style.display = isOnce ? 'none' : '';
+
+  // Requirements & disabled states
+  if (form.freq_value) {
+    form.freq_value.required = !isOnce;
+    form.freq_value.disabled = isOnce;
+  }
+  if (form.freq_unit) form.freq_unit.required = false;
+
   if (dueDateInput) dueDateInput.required = isOnce;
   if (dueTimeInput) dueTimeInput.required = isOnce;
 }
 if (freqUnitSel) freqUnitSel.addEventListener('change', syncOnceVisibility);
+
+/* ---------- quarter-hour normalization ---------- */
+function roundToQuarter(hh, mm){
+  const q = Math.round(mm / 15) * 15;
+  if (q === 60) return { hh: (hh + 1) % 24, mm: 0 };
+  return { hh, mm: q };
+}
+function clampTimeInputToQuarter(){
+  if (!dueTimeInput || !dueTimeInput.value) return;
+  const [hRaw, mRaw] = dueTimeInput.value.split(':').map(n=>parseInt(n||'0',10));
+  const {hh, mm} = roundToQuarter(isNaN(hRaw)?0:hRaw, isNaN(mRaw)?0:mRaw);
+  dueTimeInput.value = `${String(hh).padStart(2,'0')}:${String(mm).padStart(2,'0')}`;
+}
+dueTimeInput?.addEventListener('change', clampTimeInputToQuarter);
+dueTimeInput?.addEventListener('blur', clampTimeInputToQuarter);
 
 /* ---------- Sheet open/close ---------- */
 function openAdd(){
@@ -296,6 +416,7 @@ function openAdd(){
     const hh = (roundedMin === 60) ? (now.getHours()+1) % 24 : now.getHours();
     const mm = (roundedMin === 60) ? 0 : roundedMin;
     dueTimeInput.value = `${pad(hh)}:${pad(mm)}`;
+    clampTimeInputToQuarter();
   }
 
   sheet.classList.remove('hidden');
@@ -337,6 +458,7 @@ form.addEventListener('submit', async (e) => {
   };
 
   if (isOnce) {
+    clampTimeInputToQuarter();
     const dueISO = toUTCFromLocalDateTime(
       dueDateInput ? dueDateInput.value : '',
       dueTimeInput ? dueTimeInput.value : ''
@@ -374,6 +496,7 @@ if (backHome) backHome.onclick = () => { manageView.classList.add('hidden'); hom
 if (cancelSheet) cancelSheet.onclick = closeSheet;
 
 /* -------- On-Screen Keyboard (OSK) -------- */
+/* -------- On-Screen Keyboard (OSK) -------- */
 const layouts = {
   text: [
     ['q','w','e','r','t','y','u','i','o','p'],
@@ -391,18 +514,75 @@ const layouts = {
 
 function buildOSK(){
   if (!oskRows) return;
-  oskRows.innerHTML='';
+  oskRows.innerHTML = '';
   layouts[oskLayout].forEach(keys => {
-    const r=document.createElement('div'); r.className='osk-row';
-    keys.forEach(k=>{
-      const b=document.createElement('button'); b.type='button';
-      b.className='osk-key'+(k==='space'?' space':'')+(k==='enter'?' wide':'');
-      b.textContent=oskShift && k.length===1 ? k.toUpperCase():k; b.dataset.key=k;
-      b.addEventListener('mousedown', (e)=>e.preventDefault());
-      b.addEventListener('touchstart', (e)=>e.preventDefault(), {passive:false});
-      b.addEventListener('click', onOskKey);
+    const r = document.createElement('div');
+    r.className = 'osk-row';
+    keys.forEach(k => {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'osk-key' + (k==='space'?' space':'') + (k==='enter'?' wide':'');
+      b.setAttribute('role','button');
+      b.setAttribute('tabindex','-1');      // don't steal focus
+      b.dataset.key = k;
+      b.textContent = oskShift && k.length===1 ? k.toUpperCase() : k;
       r.appendChild(b);
-    }); oskRows.appendChild(r);
+    });
+    oskRows.appendChild(r);
+  });
+}
+
+function handleOskKey(key){
+  if (!oskTarget) return;
+
+  if (key === '✕' || key === 'close') { hideOSK(); return; }
+  if (key === '⌫'){
+    const supportsSel = (typeof oskTarget.selectionStart === 'number' && typeof oskTarget.selectionEnd === 'number');
+    if (!supportsSel || oskTarget.type === 'number') {
+      oskTarget.value = (oskTarget.value || '').slice(0, -1);
+    } else {
+      const s=oskTarget.selectionStart??oskTarget.value.length;
+      const en=oskTarget.selectionEnd??oskTarget.value.length;
+      if (s===en && s>0){
+        oskTarget.value=oskTarget.value.slice(0,s-1)+oskTarget.value.slice(en);
+        try{ oskTarget.setSelectionRange(s-1,s-1);}catch(_){}
+      } else {
+        oskTarget.value=oskTarget.value.slice(0,s)+oskTarget.value.slice(en);
+        try{ oskTarget.setSelectionRange(s,s);}catch(_){}
+      }
+    }
+    oskTarget.dispatchEvent(new Event('input',{bubbles:true}));
+    return;
+  }
+  if (key === 'space'){ insertAtCursor(oskTarget,' '); return; }
+  if (key === 'enter'){
+    if (oskTarget.tagName==='TEXTAREA') insertAtCursor(oskTarget,'\n');
+    else oskTarget.blur();
+    return;
+  }
+  if (key === '⇧'){ oskShift=!oskShift; buildOSK(); return; }
+  if (key === '123' || key === 'ABC'){ oskLayout = oskLayout==='text' ? 'number' : 'text'; oskShift=false; buildOSK(); return; }
+
+  const char = oskShift ? key.toUpperCase() : key;
+  insertAtCursor(oskTarget, char);
+}
+
+// Use pointer events so touch doesn’t rely on synthetic click
+if (oskRows){
+  oskRows.addEventListener('pointerdown', (e) => {
+    const btn = e.target.closest('.osk-key');
+    if (!btn || !oskTarget) return;
+    e.preventDefault();               // stop focus/scroll quirks
+    focusAtEnd(oskTarget);            // ensure caret at end
+    handleOskKey(btn.dataset.key);
+  });
+  // Fallback for environments without Pointer Events
+  oskRows.addEventListener('click', (e) => {
+    const btn = e.target.closest('.osk-key');
+    if (!btn || !oskTarget) return;
+    e.preventDefault();
+    focusAtEnd(oskTarget);
+    handleOskKey(btn.dataset.key);
   });
 }
 
@@ -410,12 +590,22 @@ function showOSK(target){
   if (!osk) return;
   oskTarget = target;
   oskLayout = (target.type === 'number') ? 'number' : 'text';
-  oskShift = false; buildOSK();
+  oskShift = false;
+  buildOSK();
   sheet.appendChild(osk);
   osk.hidden = false;
   focusAtEnd(oskTarget);
 }
 function hideOSK(){ if (osk) osk.hidden = true; oskTarget=null; }
+
+// Show OSK for relevant controls only
+document.addEventListener('focusin', (e) => {
+  const t = e.target;
+  if (!(t instanceof HTMLElement)) return;
+  const wants = t.matches('input[type="text"], input:not([type]), textarea, input[type="number"]');
+  if (wants) showOSK(t);
+});
+
 
 function focusAtEnd(el){
   el.focus({preventScroll:true});
@@ -453,18 +643,18 @@ function onOskKey(e){
       oskTarget.value = (oskTarget.value || '').slice(0, -1);
       oskTarget.dispatchEvent(new Event('input',{bubbles:true}));
       focusAtEnd(oskTarget);
-      return;
-    }
-    const s=oskTarget.selectionStart??oskTarget.value.length;
-    const en=oskTarget.selectionEnd??oskTarget.value.length;
-    if(s===en && s>0){
-      oskTarget.value=oskTarget.value.slice(0,s-1)+oskTarget.value.slice(en);
-      const pos=s-1; try{ oskTarget.setSelectionRange(pos,pos);}catch(_){}
     } else {
-      oskTarget.value=oskTarget.value.slice(0,s)+oskTarget.value.slice(en);
-      try{ oskTarget.setSelectionRange(s,s);}catch(_){}
+      const s=oskTarget.selectionStart??oskTarget.value.length;
+      const en=oskTarget.selectionEnd??oskTarget.value.length;
+      if(s===en && s>0){
+        oskTarget.value=oskTarget.value.slice(0,s-1)+oskTarget.value.slice(en);
+        const pos=s-1; try{ oskTarget.setSelectionRange(pos,pos);}catch(_){}
+      } else {
+        oskTarget.value=oskTarget.value.slice(0,s)+oskTarget.value.slice(en);
+        try{ oskTarget.setSelectionRange(s,s);}catch(_){}
+      }
+      oskTarget.dispatchEvent(new Event('input',{bubbles:true}));
     }
-    oskTarget.dispatchEvent(new Event('input',{bubbles:true}));
     return;
   }
   if(key==='space'){ insertAtCursor(oskTarget,' '); return; }
@@ -478,21 +668,6 @@ function onOskKey(e){
   const char = oskShift ? key.toUpperCase() : key;
   insertAtCursor(oskTarget, char);
 }
-
-const unicornImg = document.getElementById('unicornImg');
-if (unicornImg) {
-  unicornImg.dataset.srcIdle = unicornImg.getAttribute('src');
-  if (!unicornImg.dataset.srcCelebrate) {
-    unicornImg.dataset.srcCelebrate = '/img/unicorn_celebrate.png';
-  }
-}
-
-// Show OSK for relevant controls
-document.addEventListener('focusin', (e) => {
-  const t=e.target; if(!(t instanceof HTMLElement)) return;
-  const wants = t.matches('input[type="text"], input:not([type]), textarea, input[type="number"]');
-  if (wants) showOSK(t);
-});
 
 /* ---------- Custom Date/Time Picker (for platforms without native pickers) ---------- */
 const picker = $('#picker');
@@ -572,18 +747,19 @@ function buildCalendar(){
 
 function updateTimeDisplays(){
   const pad=n=>String(n).padStart(2,'0');
-  hVal.textContent = pad(pickHour);
-  mVal.textContent = pad(pickMin);
+  hVal && (hVal.textContent = pad(pickHour));
+  mVal && (mVal.textContent = pad(pickMin));
 }
-hInc.onclick = ()=>{ pickHour=(pickHour+1)%24; updateTimeDisplays(); };
-hDec.onclick = ()=>{ pickHour=(pickHour+23)%24; updateTimeDisplays(); };
-mInc.onclick = ()=>{ pickMin=(pickMin+15)%60; updateTimeDisplays(); };
-mDec.onclick = ()=>{ pickMin=(pickMin+45)%60; updateTimeDisplays(); };
+// null-safe bindings for picker controls
+if (hInc) hInc.onclick = ()=>{ pickHour=(pickHour+1)%24; updateTimeDisplays(); };
+if (hDec) hDec.onclick = ()=>{ pickHour=(pickHour+23)%24; updateTimeDisplays(); };
+if (mInc) mInc.onclick = ()=>{ pickMin=(pickMin+15)%60; updateTimeDisplays(); };
+if (mDec) mDec.onclick = ()=>{ pickMin=(pickMin+45)%60; updateTimeDisplays(); };
 
-pickerPrev.onclick = ()=>{ pickDate = new Date(pickDate.getFullYear(), pickDate.getMonth()-1, Math.min(28,pickDate.getDate())); buildCalendar(); };
-pickerNext.onclick = ()=>{ pickDate = new Date(pickDate.getFullYear(), pickDate.getMonth()+1, Math.min(28,pickDate.getDate())); buildCalendar(); };
-pickerCancel.onclick = closePicker;
-pickerOk.onclick = ()=>{ applyPickToInputs(); closePicker(); };
+if (pickerPrev)  pickerPrev.onclick  = ()=>{ pickDate = new Date(pickDate.getFullYear(), pickDate.getMonth()-1, Math.min(28,pickDate.getDate())); buildCalendar(); };
+if (pickerNext)  pickerNext.onclick  = ()=>{ pickDate = new Date(pickDate.getFullYear(), pickDate.getMonth()+1, Math.min(28,pickDate.getDate())); buildCalendar(); };
+if (pickerCancel) pickerCancel.onclick = closePicker;
+if (pickerOk)     pickerOk.onclick     = ()=>{ applyPickToInputs(); closePicker(); };
 
 function applyPickToInputs(){
   if (dueDateInput){
@@ -598,7 +774,7 @@ function applyPickToInputs(){
   dueTimeInput?.dispatchEvent(new Event('input',{bubbles:true}));
 }
 
-// Always use our picker on Pi (more reliable), but still keep inputs for value display
+// Always use our picker on Pi (reliable)
 if (dueDateInput){
   dueDateInput.addEventListener('focus', (e)=>{ e.preventDefault(); dueDateInput.blur(); openPicker('date'); });
   dueDateInput.addEventListener('click', (e)=>{ e.preventDefault(); dueDateInput.blur(); openPicker('date'); });
