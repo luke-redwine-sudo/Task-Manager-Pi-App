@@ -66,7 +66,7 @@ function showCongrats(msg = "🎉 Congratulations, you did it!") {
     banner.textContent = msg;
     banner.classList.add('show');
     if (bannerTimer) clearTimeout(bannerTimer);
-    bannerTimer = setTimeout(() => banner.classList.remove('show'), 5000);
+    bannerTimer = setTimeout(() => banner.classList.remove('show'), 2500);
   }
   // 🦄 swap unicorn image briefly
   if (unicornImg) {
@@ -74,7 +74,7 @@ function showCongrats(msg = "🎉 Congratulations, you did it!") {
     const party = unicornImg.dataset.srcCelebrate || idle;
     unicornImg.src = party;
     clearTimeout(unicornImg._swapTimer);
-    unicornImg._swapTimer = setTimeout(() => { unicornImg.src = idle; }, 4500);
+    unicornImg._swapTimer = setTimeout(() => { unicornImg.src = idle; }, 2000);
   }
 }
 
@@ -152,7 +152,7 @@ function tickClock(){
 }
 setInterval(tickClock, 1000); tickClock();
 
-// Fetch
+// Fetch (robust to backend errors)
 async function fetchAll(){
   const [tasksRes, logsRes] = await Promise.all([
     fetch('/api/tasks'),
@@ -162,13 +162,13 @@ async function fetchAll(){
   if (!tasksRes.ok) {
     const txt = await tasksRes.text().catch(()=>'(no body)');
     console.error('GET /api/tasks failed', tasksRes.status, txt);
-    alert('Server error loading tasks. Check the backend logs in the container.');
+    alert('Server error loading tasks. Check the backend logs.');
     return;
   }
   if (!logsRes.ok) {
     const txt = await logsRes.text().catch(()=>'(no body)');
     console.error('GET /api/logs failed', logsRes.status, txt);
-    alert('Server error loading logs. Check the backend logs in the container.');
+    alert('Server error loading logs. Check the backend logs.');
     return;
   }
 
@@ -176,7 +176,6 @@ async function fetchAll(){
   renderHome(tasks, logs);
   renderManage(tasks);
 }
-
 
 function isDueToday(dueISO){
   const now = new Date();
@@ -343,6 +342,20 @@ function iconBtn(text, title, onClick, colorClass=''){
 }
 
 /* ---------- One-off helpers ---------- */
+function roundToQuarter(hh, mm){
+  const q = Math.round(mm / 15) * 15;
+  if (q === 60) return { hh: (hh + 1) % 24, mm: 0 };
+  return { hh, mm: q };
+}
+function clampTimeInputToQuarter(){
+  if (!dueTimeInput || !dueTimeInput.value) return;
+  const [hRaw, mRaw] = dueTimeInput.value.split(':').map(n=>parseInt(n||'0',10));
+  const {hh, mm} = roundToQuarter(isNaN(hRaw)?0:hRaw, isNaN(mRaw)?0:mRaw);
+  dueTimeInput.value = `${String(hh).padStart(2,'0')}:${String(mm).padStart(2,'0')}`;
+}
+dueTimeInput?.addEventListener('change', clampTimeInputToQuarter);
+dueTimeInput?.addEventListener('blur', clampTimeInputToQuarter);
+
 function toUTCFromLocalDateTime(dateStr, timeStr){
   if(!dateStr) return null;
   let [y,m,d] = dateStr.split("-").map(Number);
@@ -383,21 +396,6 @@ function syncOnceVisibility(){
   if (dueTimeInput) dueTimeInput.required = isOnce;
 }
 if (freqUnitSel) freqUnitSel.addEventListener('change', syncOnceVisibility);
-
-/* ---------- quarter-hour normalization ---------- */
-function roundToQuarter(hh, mm){
-  const q = Math.round(mm / 15) * 15;
-  if (q === 60) return { hh: (hh + 1) % 24, mm: 0 };
-  return { hh, mm: q };
-}
-function clampTimeInputToQuarter(){
-  if (!dueTimeInput || !dueTimeInput.value) return;
-  const [hRaw, mRaw] = dueTimeInput.value.split(':').map(n=>parseInt(n||'0',10));
-  const {hh, mm} = roundToQuarter(isNaN(hRaw)?0:hRaw, isNaN(mRaw)?0:mRaw);
-  dueTimeInput.value = `${String(hh).padStart(2,'0')}:${String(mm).padStart(2,'0')}`;
-}
-dueTimeInput?.addEventListener('change', clampTimeInputToQuarter);
-dueTimeInput?.addEventListener('blur', clampTimeInputToQuarter);
 
 /* ---------- Sheet open/close ---------- */
 function openAdd(){
@@ -496,7 +494,6 @@ if (backHome) backHome.onclick = () => { manageView.classList.add('hidden'); hom
 if (cancelSheet) cancelSheet.onclick = closeSheet;
 
 /* -------- On-Screen Keyboard (OSK) -------- */
-/* -------- On-Screen Keyboard (OSK) -------- */
 const layouts = {
   text: [
     ['q','w','e','r','t','y','u','i','o','p'],
@@ -534,6 +531,7 @@ function buildOSK(){
 
 function handleOskKey(key){
   if (!oskTarget) return;
+  focusAtEnd(oskTarget); // ensure caret
 
   if (key === '✕' || key === 'close') { hideOSK(); return; }
   if (key === '⌫'){
@@ -567,23 +565,26 @@ function handleOskKey(key){
   insertAtCursor(oskTarget, char);
 }
 
-// Use pointer events so touch doesn’t rely on synthetic click
+// Bind exactly ONE handler: pointerdown OR click (never both)
 if (oskRows){
-  oskRows.addEventListener('pointerdown', (e) => {
-    const btn = e.target.closest('.osk-key');
-    if (!btn || !oskTarget) return;
-    e.preventDefault();               // stop focus/scroll quirks
-    focusAtEnd(oskTarget);            // ensure caret at end
-    handleOskKey(btn.dataset.key);
-  });
-  // Fallback for environments without Pointer Events
-  oskRows.addEventListener('click', (e) => {
-    const btn = e.target.closest('.osk-key');
-    if (!btn || !oskTarget) return;
-    e.preventDefault();
-    focusAtEnd(oskTarget);
-    handleOskKey(btn.dataset.key);
-  });
+  const usePointer = 'PointerEvent' in window;
+  if (usePointer){
+    oskRows.addEventListener('pointerdown', (e) => {
+      const btn = e.target.closest('.osk-key');
+      if (!btn || !oskTarget) return;
+      e.preventDefault(); // prevent focus change / ghost clicks
+      e.stopPropagation();
+      handleOskKey(btn.dataset.key);
+    }, {passive:false});
+  } else {
+    oskRows.addEventListener('click', (e) => {
+      const btn = e.target.closest('.osk-key');
+      if (!btn || !oskTarget) return;
+      e.preventDefault();
+      e.stopPropagation();
+      handleOskKey(btn.dataset.key);
+    });
+  }
 }
 
 function showOSK(target){
@@ -598,15 +599,6 @@ function showOSK(target){
 }
 function hideOSK(){ if (osk) osk.hidden = true; oskTarget=null; }
 
-// Show OSK for relevant controls only
-document.addEventListener('focusin', (e) => {
-  const t = e.target;
-  if (!(t instanceof HTMLElement)) return;
-  const wants = t.matches('input[type="text"], input:not([type]), textarea, input[type="number"]');
-  if (wants) showOSK(t);
-});
-
-
 function focusAtEnd(el){
   el.focus({preventScroll:true});
   try { const len = (el.value || '').length; el.setSelectionRange(len, len); } catch(_){}
@@ -617,7 +609,6 @@ function insertAtCursor(el, text){
   const supportsSel = (typeof el.selectionStart === 'number' && typeof el.selectionEnd === 'number');
   if (!supportsSel || el.type === 'number') {
     el.value = (el.value || '') + text;
-    try { focusAtEnd(el); } catch(_){}
   } else {
     const start = el.selectionStart ?? el.value.length;
     const end = el.selectionEnd ?? el.value.length;
@@ -630,44 +621,13 @@ function insertAtCursor(el, text){
   el.dispatchEvent(new Event('input',{bubbles:true}));
 }
 
-function onOskKey(e){
-  e.preventDefault();
-  if(!oskTarget) return;
-  focusAtEnd(oskTarget);
-
-  const key=e.currentTarget.dataset.key;
-  if(key==='✕' || key==='close'){ hideOSK(); return; }
-  if(key==='⌫'){
-    const supportsSel = (typeof oskTarget.selectionStart === 'number' && typeof oskTarget.selectionEnd === 'number');
-    if (!supportsSel || oskTarget.type === 'number') {
-      oskTarget.value = (oskTarget.value || '').slice(0, -1);
-      oskTarget.dispatchEvent(new Event('input',{bubbles:true}));
-      focusAtEnd(oskTarget);
-    } else {
-      const s=oskTarget.selectionStart??oskTarget.value.length;
-      const en=oskTarget.selectionEnd??oskTarget.value.length;
-      if(s===en && s>0){
-        oskTarget.value=oskTarget.value.slice(0,s-1)+oskTarget.value.slice(en);
-        const pos=s-1; try{ oskTarget.setSelectionRange(pos,pos);}catch(_){}
-      } else {
-        oskTarget.value=oskTarget.value.slice(0,s)+oskTarget.value.slice(en);
-        try{ oskTarget.setSelectionRange(s,s);}catch(_){}
-      }
-      oskTarget.dispatchEvent(new Event('input',{bubbles:true}));
-    }
-    return;
-  }
-  if(key==='space'){ insertAtCursor(oskTarget,' '); return; }
-  if(key==='enter'){
-    if(oskTarget.tagName==='TEXTAREA') insertAtCursor(oskTarget,'\n');
-    else oskTarget.blur();
-    return;
-  }
-  if(key==='⇧'){ oskShift=!oskShift; buildOSK(); return; }
-  if(key==='123' || key==='ABC'){ oskLayout = oskLayout==='text' ? 'number' : 'text'; buildOSK(); return; }
-  const char = oskShift ? key.toUpperCase() : key;
-  insertAtCursor(oskTarget, char);
-}
+// Show OSK for relevant controls only
+document.addEventListener('focusin', (e) => {
+  const t = e.target;
+  if (!(t instanceof HTMLElement)) return;
+  const wants = t.matches('input[type="text"], input:not([type]), textarea, input[type="number"]');
+  if (wants) showOSK(t);
+});
 
 /* ---------- Custom Date/Time Picker (for platforms without native pickers) ---------- */
 const picker = $('#picker');
@@ -747,10 +707,9 @@ function buildCalendar(){
 
 function updateTimeDisplays(){
   const pad=n=>String(n).padStart(2,'0');
-  hVal && (hVal.textContent = pad(pickHour));
-  mVal && (mVal.textContent = pad(pickMin));
+  if (hVal) hVal.textContent = pad(pickHour);
+  if (mVal) mVal.textContent = pad(pickMin);
 }
-// null-safe bindings for picker controls
 if (hInc) hInc.onclick = ()=>{ pickHour=(pickHour+1)%24; updateTimeDisplays(); };
 if (hDec) hDec.onclick = ()=>{ pickHour=(pickHour+23)%24; updateTimeDisplays(); };
 if (mInc) mInc.onclick = ()=>{ pickMin=(pickMin+15)%60; updateTimeDisplays(); };

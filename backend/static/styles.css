@@ -168,7 +168,8 @@ h2{
 .osk-row{display:flex; gap:.35rem; justify-content:center}
 .osk-key{
   flex:1 0 auto; min-width:44px; height:56px; border:2px solid #000; border-radius:12px;
-  background:#151a21; color:#f3f4f6; font-size:1.1rem; font-weight:700; display:grid; place-items:center; user-select:none
+  background:#151a21; color:#f3f4f6; font-size:1.1rem; font-weight:700; display:grid; place-items:center; user-select:none;
+  touch-action: manipulation; /* prevent ghost clicks / delays */
 }
 .osk-key.wide{flex:2 0 auto}
 .osk-key.space{min-width:40vw}
