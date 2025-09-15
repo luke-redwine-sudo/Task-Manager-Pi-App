@@ -18,6 +18,14 @@ const dueDateInput = document.getElementById("dueDate");
 const dueTimeInput = document.getElementById("dueTime");
 let editingId = null;
 
+const wNow = document.getElementById('wNow');
+const wRange = document.getElementById('wRange');
+const wCond = document.getElementById('wCond');
+const wRain = document.getElementById('wRain');
+const wIcon = document.getElementById('wIcon');   // NEW
+let _lastWeatherFetch = 0;
+
+
 // OSK
 const osk = $("#osk");
 const oskRows = $("#oskRows");
@@ -149,8 +157,10 @@ function tickClock(){
     overlayDismissed = false;
     fetchAll();            // re-render everything
   }
+  if ((new Date()).getMinutes() % 10 === 0) fetchWeather(false);
 }
 setInterval(tickClock, 1000); tickClock();
+fetchWeather(true);
 
 // Fetch (robust to backend errors)
 async function fetchAll(){
@@ -294,6 +304,58 @@ function taskRow(t){
   row.append(left, actions);
   return row;
 }
+
+function fmtTemp(n){
+  if (n === null || n === undefined) return '--°F';
+  // If you want Fahrenheit, convert here:
+  // return Math.round((n * 9/5) + 32) + '°F';
+  return Math.round(n) + '°F';
+}
+
+async function fetchWeather(force=false){
+  const now = Date.now();
+  if (!force && (now - _lastWeatherFetch) < 5*60*1000) return; // 5 min cache on UI side
+  try{
+    const res = await fetch('/api/weather');
+    if(!res.ok) throw new Error('weather ' + res.status);
+  const data = await res.json();
+
+  if (wNow)   wNow.textContent   = fmtTemp(data.current_temp);
+  if (wRange) wRange.textContent = `L:${fmtTemp(data.low)} H:${fmtTemp(data.high)}`;
+
+  const cond = (data.condition || '—');
+  if (wCond)  wCond.textContent  = cond;
+  if (wIcon)  wIcon.textContent  = emojiFor(cond);   // NEW
+
+  if (wRain){
+    if (cond.toLowerCase() === 'rainy' && data.next_rain_iso){
+      const when = new Intl.DateTimeFormat('en-US',{ timeZone:'America/New_York', timeStyle:'short' })
+                    .format(toUTCDate(data.next_rain_iso));
+      wRain.textContent = `Rain ${when}`;
+    } else {
+      wRain.textContent = '';
+    }
+  }
+
+    _lastWeatherFetch = now;
+  } catch (e){
+    console.warn('weather fetch failed', e);
+    if (wNow)   wNow.textContent = '--°';
+    if (wRange) wRange.textContent = 'L:--° H:--°';
+    if (wCond)  wCond.textContent = '—';
+    if (wRain)  wRain.textContent = '';
+  }
+}
+
+function emojiFor(cond){
+  switch ((cond || '').toLowerCase()){
+    case 'sunny':  return '☀️';
+    case 'rainy':  return '🌧️';
+    case 'cloudy': // fallthrough
+    default:       return '☁️';
+  }
+}
+
 
 function manageRow(t){
   const row = document.createElement('div');

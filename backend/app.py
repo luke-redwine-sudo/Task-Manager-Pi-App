@@ -7,6 +7,20 @@ from db import Base, engine, SessionLocal
 from models import Task, TaskLog
 import re
 
+# --- Weather proxy (Open-Meteo) ---
+import json, time
+from urllib.parse import urlencode
+from urllib.request import urlopen, Request
+
+WEATHER_LAT = float(os.getenv("WEATHER_LAT", "32.856050"))   # set your Pi's lat
+WEATHER_LON = float(os.getenv("WEATHER_LON", "-79.924752"))  # set your Pi's lon
+WEATHER_TZ  = os.getenv("WEATHER_TZ", "America/New_York")
+
+# small in-memory cache to avoid hammering the API
+_weather_cache = {"t": 0.0, "data": None}
+_WEATHER_TTL = 300  # seconds
+
+
 app = Flask(__name__, static_folder="static", static_url_path="/")
 CORS(app)
 
@@ -286,6 +300,111 @@ def list_logs():
             "done_at": l.done_at.isoformat() + "Z",
         } for l in logs
     ])
+
+@app.get("/api/weather")
+def api_weather():
+    """Return { current_temp, low, high, condition, next_rain_iso } for today in ET."""
+    now = time.time()
+    if _weather_cache["data"] and (now - _weather_cache["t"] < _WEATHER_TTL):
+        return jsonify(_weather_cache["data"])
+
+    params = {
+        "latitude": WEATHER_LAT,
+        "longitude": WEATHER_LON,
+        "timezone": WEATHER_TZ,
+        "current_weather": "true",
+        "hourly": "temperature_2m,precipitation,precipitation_probability,weathercode",
+        "daily": "temperature_2m_max,temperature_2m_min",
+        "temperature_unit": "fahrenheit",
+    }
+    url = f"https://api.open-meteo.com/v1/forecast?{urlencode(params)}"
+    try:
+        with urlopen(Request(url, headers={"User-Agent": "pi-task-manager"}), timeout=8) as resp:
+            raw = json.loads(resp.read().decode("utf-8"))
+    except Exception as e:
+        return jsonify({"error": "weather_unavailable", "detail": str(e)}), 502
+
+    # Current temp
+    cur_temp = None
+    condition = "cloudy"
+    next_rain_iso = None
+
+    cw = raw.get("current_weather") or {}
+    if "temperature" in cw:
+        cur_temp = round(cw["temperature"])
+
+    # Map weathercode → sunny/cloudy/rainy
+    def cond_from_code(code: int) -> str:
+        if code in (0,):                      # clear
+            return "sunny"
+        if code in (1, 2, 3, 45, 48):         # mainly/partly cloudy, fog
+            return "cloudy"
+        if 51 <= code <= 67:                   # drizzle to freezing rain
+            return "rainy"
+        if 80 <= code <= 82:                   # rain showers
+            return "rainy"
+        if 95 <= code <= 99:                   # thunderstorms
+            return "rainy"
+        return "cloudy"
+
+    if "weathercode" in cw:
+        try:
+            condition = cond_from_code(int(cw["weathercode"]))
+        except Exception:
+            pass
+
+    # Daily min/max (today)
+    daily = raw.get("daily") or {}
+    low = high = None
+    try:
+        tmin = daily.get("temperature_2m_min") or []
+        tmax = daily.get("temperature_2m_max") or []
+        if tmin: low  = round(tmin[0])
+        if tmax: high = round(tmax[0])
+    except Exception:
+        pass
+
+    # If rainy, find the next hour today with measurable precip
+    if condition == "rainy":
+        hourly = raw.get("hourly") or {}
+        hours  = hourly.get("time") or []
+        precip = hourly.get("precipitation") or []
+        # Some models also provide precipitation_probability
+        # We'll consider >0 mm/h or prob >= 50% as rain
+        prob   = hourly.get("precipitation_probability") or []
+        # Find current hour index
+        try:
+            # current_weather.time is local (timezone above)
+            cur_local_time = cw.get("time")  # e.g., "2025-09-15T12:00"
+            if cur_local_time and cur_local_time in hours:
+                start_idx = hours.index(cur_local_time)
+            else:
+                start_idx = 0
+        except Exception:
+            start_idx = 0
+
+        next_idx = None
+        for i in range(start_idx, min(start_idx + 24, len(hours))):  # today-ish
+            p = (precip[i] if i < len(precip) else 0) or 0
+            pr = (prob[i] if i < len(prob) else 0) or 0
+            if (p and p > 0) or (pr and pr >= 50):
+                next_idx = i
+                break
+        if next_idx is not None:
+            # Return as ISO with Z so the front-end formats ET uniformly
+            next_rain_iso = hours[next_idx] + ":00Z" if len(hours[next_idx]) == 16 else hours[next_idx] + "Z"
+
+    data = {
+        "current_temp": cur_temp,   # °C if you set metric elsewhere; Open-Meteo defaults to °C
+        "low": low,
+        "high": high,
+        "condition": condition,     # "sunny" | "cloudy" | "rainy"
+        "next_rain_iso": next_rain_iso,
+        "updated_at": datetime.utcnow().isoformat() + "Z",
+    }
+    _weather_cache["t"] = now
+    _weather_cache["data"] = data
+    return jsonify(data)
 
 @app.get("/")
 def root():

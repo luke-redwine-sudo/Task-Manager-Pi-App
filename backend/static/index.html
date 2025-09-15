@@ -10,8 +10,17 @@
 <!-- Top time bar -->
 <header class="bar">
     <div id="clock" aria-live="polite"></div>
-    <div class="spacer"></div>
+    <div class="bar-sep"></div>
+    <div id="weather" class="weather" aria-live="polite">
+        <span id="wNow"   class="w-now">--°</span>
+        <span id="wRange" class="w-range">L:--° H:--°</span>
+        <!-- NEW: emoji icon -->
+        <span id="wIcon"  class="w-icon" aria-hidden="true">⛅</span>
+        <span id="wCond"  class="w-cond">—</span>
+        <span id="wRain"  class="w-rain"></span>
+    </div>
 </header>
+
 
 <main class="grid">
     <!-- Left column: scrollable content -->
